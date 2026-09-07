@@ -15,8 +15,8 @@ library of any kind.
 ## Build
 
 ```sh
-make            # gcc -Wall -Wextra -O2, zero warnings -> ./traceroute
-make clean
+make            # gcc -Wall -Wextra -O2, zero warnings -> build/bin/traceroute (copied to ./traceroute)
+make clean      # removes build/ and ./traceroute
 ```
 
 Verify that nothing but libc got linked in:

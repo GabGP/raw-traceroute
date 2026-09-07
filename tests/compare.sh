@@ -10,7 +10,8 @@
 set -u
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
-BIN="$DIR/traceroute"
+BIN="$DIR/build/bin/traceroute"
+[ ! -x "$BIN" ] && BIN="$DIR/traceroute"
 
 HOST="${1:-8.8.8.8}"
 [ $# -gt 0 ] && shift
