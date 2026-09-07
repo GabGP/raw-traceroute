@@ -35,6 +35,16 @@
 *.i*86
 *.x86_64
 *.hex
+/traceroute
+
+# Java binaries
+*.class
+*.jar
+*.war
+*.ear
+
+# Build directories
+build/
 
 # Debug files
 *.dSYM/
