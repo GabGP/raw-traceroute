@@ -1,11 +1,13 @@
 #!/bin/bash
-# Corre nuestro traceroute y el traceroute del sistema con los mismos
-# argumentos, guarda ambas salidas en tests/logs/ y muestra el diff lado a lado.
+# compare.sh - Side-by-side comparison against the system traceroute.
 #
-#   uso: tests/compare.sh [HOST] [ARGS...]
-#   por defecto: HOST=8.8.8.8  ARGS=-n -m 20 -w 2
+# Runs both our custom raw traceroute and system traceroute with identical
+# parameters, saving logs to tests/logs/ and displaying a side-by-side diff.
 #
-# Ambos necesitan root porque abren sockets RAW.
+#   Usage: tests/compare.sh [HOST] [ARGS...]
+#   Default: HOST=8.8.8.8  ARGS=-n -m 20 -w 2
+#
+# Both commands require root privileges because they open RAW sockets.
 
 set -u
 
@@ -28,18 +30,23 @@ if ! command -v traceroute >/dev/null 2>&1; then
     exit 1
 fi
 
+SUDO="sudo"
+if [ "$(id -u)" -eq 0 ]; then
+    SUDO=""
+fi
+
 LOGS="$DIR/tests/logs"
 mkdir -p "$LOGS"
 SAFE="${HOST//[^A-Za-z0-9._-]/_}"
 OWN="$LOGS/own_$SAFE.log"
 SYS="$LOGS/system_$SAFE.log"
 
-echo "=== propio:  sudo ./traceroute ${ARGS[*]} $HOST"
-sudo "$BIN" "${ARGS[@]}" "$HOST" | tee "$OWN"
+echo "=== propio:  $SUDO ./traceroute ${ARGS[*]} $HOST"
+$SUDO "$BIN" "${ARGS[@]}" "$HOST" | tee "$OWN"
 
 echo
-echo "=== sistema: sudo traceroute ${ARGS[*]} $HOST"
-sudo traceroute "${ARGS[@]}" "$HOST" | tee "$SYS"
+echo "=== sistema: $SUDO traceroute ${ARGS[*]} $HOST"
+$SUDO traceroute "${ARGS[@]}" "$HOST" | tee "$SYS"
 
 echo
 echo "=== diff lado a lado (izquierda = propio, derecha = sistema)"
