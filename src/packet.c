@@ -27,7 +27,11 @@ uint16_t calculate_checksum(const void *buffer, int size)
         p += sizeof(word);
         size -= (int)sizeof(word);
     }
-    if (size == 1) sum += *p;
+    if (size == 1) {
+        uint16_t odd = 0;
+        memcpy(&odd, p, 1);
+        sum += odd;
+    }
 
     while (sum >> CKSUM_SHIFT) {
         sum = (sum & CKSUM_MASK) + (sum >> CKSUM_SHIFT);
@@ -46,13 +50,11 @@ uint16_t calculate_udp_checksum(uint32_t src_addr, uint32_t dst_addr,
 
     if (udp_segment_len < 0 || udp_segment_len > PROBE_LEN) return 0;
     total_len = (int)sizeof(pseudo_header_t) + udp_segment_len;
-
     psh.src_addr   = src_addr;
     psh.dst_addr   = dst_addr;
     psh.zero       = 0;
     psh.protocol   = IPPROTO_UDP;
     psh.udp_length = htons((uint16_t)udp_segment_len);
-
     memcpy(pseudo_packet, &psh, sizeof(psh));
     memcpy(pseudo_packet + sizeof(psh), udp_segment, (size_t)udp_segment_len);
 
@@ -69,7 +71,6 @@ void build_probe_packet(uint8_t *buf, uint32_t src_addr, uint32_t dst_addr,
     const int udp_len = UDP_SEGMENT_LEN;
 
     memset(buf, 0, PROBE_LEN);
-
     /* --- IP Header (RFC 791) --- */
     memset(&iph, 0, sizeof(iph));
     iph.ihl_version  = (IPV4_VERSION << IPV4_VERSION_SHIFT) | IPV4_IHL_MIN_WORDS;
@@ -95,6 +96,7 @@ void build_probe_packet(uint8_t *buf, uint32_t src_addr, uint32_t dst_addr,
 
     udph.checksum = calculate_udp_checksum(src_addr, dst_addr,
                                            buf + IP_HEADER_LEN, udp_len);
+    if (udph.checksum == 0) udph.checksum = UDP_CKSUM_ZERO_SUBSTITUTE;
     memcpy(buf + IP_HEADER_LEN, &udph, sizeof(udph));
 }
 
@@ -115,8 +117,8 @@ int parse_icmp_reply(const uint8_t *packet, int len, uint16_t src_port,
 
     /* 2. ICMP header: only Time Exceeded (11) and Dest Unreachable (3) quote probe */
     icmp_off = outer_ihl;
-    reply->type = packet[icmp_off];
-    reply->code = packet[icmp_off + 1];
+    reply->type = packet[icmp_off + ICMP_TYPE_OFFSET];
+    reply->code = packet[icmp_off + ICMP_CODE_OFFSET];
     if (reply->type != ICMP_TIME_EXCEEDED && reply->type != ICMP_DEST_UNREACH) {
         return 0;
     }

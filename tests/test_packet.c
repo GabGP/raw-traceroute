@@ -123,6 +123,7 @@ static void test_udp_pseudo_header_checksum(void)
 
     build_probe_packet(buf, src, dst, 1, 35000, 33440, 10);
     memcpy(&udph, buf + IP_HEADER_LEN, sizeof(udph));
+    assert(udph.checksum != 0);
 
     /* Recalculating directly with calculate_udp_checksum should match */
     computed_cksum = calculate_udp_checksum(src, dst, buf + IP_HEADER_LEN,

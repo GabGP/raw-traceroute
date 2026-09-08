@@ -71,9 +71,13 @@ typedef struct {
 #define UDP_SEGMENT_LEN         (PROBE_LEN - IP_HEADER_LEN)   /* 40 */
 #define UDP_PAYLOAD_LEN         (UDP_SEGMENT_LEN - UDP_HEADER_LEN) /* 32 */
 
+#define UDP_CKSUM_ZERO_SUBSTITUTE 0xFFFF
+
 #define ICMP_TIME_EXCEEDED      11
 #define ICMP_DEST_UNREACH        3
 #define ICMP_PORT_UNREACH_CODE   3
+#define ICMP_TYPE_OFFSET         0
+#define ICMP_CODE_OFFSET         1
 
 /*
  * Internet Checksum (RFC 1071), standard algorithm from Lab #05.
