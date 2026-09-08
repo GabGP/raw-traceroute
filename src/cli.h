@@ -25,6 +25,8 @@
 #define MAX_SENDWAIT_MS      10000
 
 #define CLI_DECIMAL_BASE     10
+#define CLI_NUMERIC_ON       1
+#define REQUIRED_HOST_ARGS   1
 
 typedef struct {
     int first_ttl;      /* First hop TTL (default: 1, range: 1..255) */

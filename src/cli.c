@@ -56,7 +56,7 @@ int cli_parse(int argc, char **argv, traceroute_config_t *cfg)
     while ((opt = getopt(argc, argv, "nf:m:q:w:z:")) != -1) {
         switch (opt) {
         case 'n':
-            cfg->numeric = 1;
+            cfg->numeric = CLI_NUMERIC_ON;
             break;
         case 'f':
             if (parse_int_arg(optarg, MIN_TTL, MAX_TTL, "-f", &cfg->first_ttl) < 0) return -1;
@@ -79,7 +79,7 @@ int cli_parse(int argc, char **argv, traceroute_config_t *cfg)
         }
     }
 
-    if (optind != argc - 1) {
+    if (optind != argc - REQUIRED_HOST_ARGS) {
         cli_usage();
         return -1;
     }
