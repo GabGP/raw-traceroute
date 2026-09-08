@@ -16,6 +16,7 @@ library of any kind.
 
 ```sh
 make            # gcc -Wall -Wextra -O2, zero warnings -> build/bin/traceroute (copied to ./traceroute)
+make test       # runs non-root Tier A (unit) and Tier B (CLI) automated tests
 make clean      # removes build/ and ./traceroute
 ```
 
@@ -156,8 +157,14 @@ tool against itself. The expected causes:
 
 | Path | Contents |
 |------|----------|
-| `src/traceroute.c` | CLI parsing, address resolution, hop loop, output format |
-| `src/packet.c` / `src/packet.h` | IP/UDP/ICMP structs, checksums, probe builder, ICMP reply parser |
-| `Makefile` | `make`, `make clean` |
-| `tests/compare.sh` | side-by-side comparison against the system traceroute |
-| `docs/PACKET_WALKTHROUGH.md` | byte-level story of one probe and its reply |
+| `src/traceroute.c` | Top-level orchestrator and console presentation loop |
+| `src/packet.c` / `src/packet.h` | IP/UDP/ICMP structs, RFC 1071 checksums, 60-byte probe builder, ICMP reply parser |
+| `src/cli.c` / `src/cli.h` | CLI argument parsing via `getopt()`, range validation, usage banner |
+| `src/network.c` / `src/network.h` | DNS resolution (`getaddrinfo`), kernel routing table egress IP discovery, address formatting |
+| `src/probe.c` / `src/probe.h` | Raw socket lifecycle, packet transmission, event-driven `select()` wait loop, RTT timing |
+| `Makefile` | Build targets: `make`, `make test`, `make test-integration`, `make clean` |
+| `tests/test_packet.c` | Tier A automated unit test suite (checksums, pseudo-headers, ICMP parsing) |
+| `tests/test_cli.sh` | Tier B automated CLI parameter bounds and permissions test suite |
+| `tests/test_integration.sh` | Tier C live network integration test suite (requires `sudo`) |
+| `tests/compare.sh` | Side-by-side comparison and diff against system traceroute (requires `sudo`) |
+| `docs/PACKET_WALKTHROUGH.md` | Byte-level story of one probe and its reply |
