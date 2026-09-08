@@ -25,6 +25,8 @@
 #define US_PER_MS            1000.0
 #define MS_PER_SEC_INT       1000
 #define NS_PER_MS_LONG       1000000L
+#define NS_PER_SEC_LONG      1000000000L
+#define NS_PER_US_LONG       1000L
 
 #ifndef CLOCK_MONOTONIC
 #define CLOCK_MONOTONIC      1
@@ -43,6 +45,9 @@ int probe_engine_init(probe_engine_t *engine, struct in_addr src, struct in_addr
 
 /* Closes open socket descriptors */
 void probe_engine_close(probe_engine_t *engine);
+
+/* Flushes any stale or extraneous replies from the raw ICMP receive queue */
+void probe_drain_replies(probe_engine_t *engine);
 
 /* Crafts and sends a single 60-byte UDP probe with specific TTL and destination port */
 int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_id);

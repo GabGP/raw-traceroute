@@ -26,14 +26,8 @@ double probe_elapsed_ms(const struct timespec *from, const struct timespec *to)
 
 void probe_engine_close(probe_engine_t *engine)
 {
-    if (engine->send_fd >= 0) {
-        close(engine->send_fd);
-        engine->send_fd = -1;
-    }
-    if (engine->recv_fd >= 0) {
-        close(engine->recv_fd);
-        engine->recv_fd = -1;
-    }
+    if (engine->send_fd >= 0) { close(engine->send_fd); engine->send_fd = -1; }
+    if (engine->recv_fd >= 0) { close(engine->recv_fd); engine->recv_fd = -1; }
 }
 
 int probe_engine_init(probe_engine_t *engine, struct in_addr src, struct in_addr dst)
@@ -66,11 +60,19 @@ int probe_engine_init(probe_engine_t *engine, struct in_addr src, struct in_addr
     return 0;
 }
 
+void probe_drain_replies(probe_engine_t *engine)
+{
+    uint8_t dummy[RECV_BUFFER_SIZE];
+    while (recvfrom(engine->recv_fd, dummy, sizeof(dummy), MSG_DONTWAIT, NULL, NULL) > 0) {
+    }
+}
+
 int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_id)
 {
     uint8_t buf[PROBE_LEN] __attribute__((aligned(4)));
     struct sockaddr_in to;
 
+    probe_drain_replies(engine);
     build_probe_packet(buf, engine->src_ip.s_addr, engine->dst_ip.s_addr,
                        (uint8_t)ttl, engine->src_port, dst_port, ip_id);
 
@@ -96,7 +98,8 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
     struct timespec now, deadline;
     struct timeval tv;
     fd_set rfds;
-    double remaining;
+    time_t sec;
+    long nsec;
     ssize_t n;
     int rc;
 
@@ -105,11 +108,16 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
 
     for (;;) {
         clock_gettime(CLOCK_MONOTONIC, &now);
-        remaining = probe_elapsed_ms(&now, &deadline);
-        if (remaining <= 0.0) return 0;
+        sec = deadline.tv_sec - now.tv_sec;
+        nsec = deadline.tv_nsec - now.tv_nsec;
+        if (nsec < 0) {
+            sec--;
+            nsec += NS_PER_SEC_LONG;
+        }
+        if (sec < 0 || (sec == 0 && nsec <= 0)) return 0;
 
-        tv.tv_sec  = (time_t)(remaining / MS_PER_SEC);
-        tv.tv_usec = (suseconds_t)((remaining - (double)tv.tv_sec * MS_PER_SEC) * US_PER_MS);
+        tv.tv_sec  = sec;
+        tv.tv_usec = (suseconds_t)(nsec / NS_PER_US_LONG);
 
         FD_ZERO(&rfds);
         FD_SET(engine->recv_fd, &rfds);
