@@ -63,3 +63,6 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Test logs
+tests/logs/
