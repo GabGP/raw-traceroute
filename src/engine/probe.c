@@ -24,6 +24,15 @@ double probe_elapsed_ms(const struct timespec *from, const struct timespec *to)
          + (double)(to->tv_nsec - from->tv_nsec) / NS_PER_MS;
 }
 
+void probe_sleep_ms(int ms)
+{
+    if (ms <= 0) return;
+    struct timespec pause;
+    pause.tv_sec  = ms / MS_PER_SEC_INT;
+    pause.tv_nsec = (long)(ms % MS_PER_SEC_INT) * NS_PER_MS_LONG;
+    nanosleep(&pause, NULL);
+}
+
 void probe_engine_close(probe_engine_t *engine)
 {
     raw_socket_close(&engine->send_fd);
@@ -64,7 +73,7 @@ int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_i
 
 int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int timeout_s,
                      uint16_t dst_port, struct in_addr *from, icmp_reply_t *reply,
-                     double *rtt_ms)
+                     double *rtt_ms, const volatile sig_atomic_t *interrupted)
 {
     uint8_t buf[RECV_BUFFER_SIZE] __attribute__((aligned(4)));
     struct sockaddr_in sa;
@@ -81,6 +90,7 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
     deadline.tv_sec += timeout_s;
 
     for (;;) {
+        if (interrupted && *interrupted) return PROBE_REPLY_TIMEOUT;
         clock_gettime(CLOCK_MONOTONIC, &now);
         sec = deadline.tv_sec - now.tv_sec;
         nsec = deadline.tv_nsec - now.tv_nsec;
@@ -97,7 +107,10 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
         FD_SET(engine->recv_fd, &rfds);
         rc = select(engine->recv_fd + 1, &rfds, NULL, NULL, &tv);
         if (rc < 0) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR) {
+                if (interrupted && *interrupted) return PROBE_REPLY_TIMEOUT;
+                continue;
+            }
             return PROBE_REPLY_TIMEOUT;
         }
         if (rc == SELECT_TIMEOUT_ZERO) return PROBE_REPLY_TIMEOUT;
@@ -106,7 +119,10 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
         n = recvfrom(engine->recv_fd, buf, sizeof(buf), RECVFROM_FLAGS_DEFAULT,
                      (struct sockaddr *)&sa, &slen);
         if (n < 0) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR) {
+                if (interrupted && *interrupted) return PROBE_REPLY_TIMEOUT;
+                continue;
+            }
             return PROBE_REPLY_TIMEOUT;
         }
         clock_gettime(CLOCK_MONOTONIC, &now);

@@ -12,6 +12,8 @@
 #include <time.h>
 #include <netinet/in.h>
 
+#include <signal.h>
+
 #include "packet.h"
 #include "raw_socket.h"
 
@@ -58,7 +60,10 @@ int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_i
 /* Waits up to timeout_s for an ICMP reply matching dst_port and engine->src_port */
 int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int timeout_s,
                      uint16_t dst_port, struct in_addr *from, icmp_reply_t *reply,
-                     double *rtt_ms);
+                     double *rtt_ms, const volatile sig_atomic_t *interrupted);
+
+/* Pauses execution for ms milliseconds using nanosleep */
+void probe_sleep_ms(int ms);
 
 /* Utility function returning elapsed milliseconds between two timespecs */
 double probe_elapsed_ms(const struct timespec *from, const struct timespec *to);
