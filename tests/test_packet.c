@@ -1,8 +1,9 @@
 /*
- * test_packet.c - Tier A non-root unit test suite for packet engine.
+ * test_packet.c - Tier A non-root unit test suite for modular packet engine.
  *
- * Validates RFC 1071 checksum calculations, UDP pseudo-header layouts,
- * 60-byte probe construction, and ICMP error reply dissection and defenses.
+ * Validates RFC 1071 checksum calculations, IPv4 header assembly, UDP header
+ * assembly with RFC 768 zero substitution, 60-byte probe construction,
+ * and ICMP error reply dissection and defenses.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -16,6 +17,10 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+#include "../src/checksum.h"
+#include "../src/ip_header.h"
+#include "../src/udp_header.h"
+#include "../src/icmp_header.h"
 #include "../src/packet.h"
 
 #define TEST_SAMPLE_TTL          12
@@ -47,21 +52,75 @@ static void test_rfc1071_checksum(void)
     uint8_t odd_data[]  = {0x12, 0x34, 0x56};
     assert(calculate_checksum(even_data, sizeof(even_data)) ==
            calculate_checksum(odd_data, sizeof(odd_data)));
+}
 
-    /* 4. Inverting checksum over a valid header returns 0 */
+static void test_ip_header_builder(void)
+{
     ip_header_t iph;
-    memset(&iph, 0, sizeof(iph));
-    iph.ihl_version  = (IPV4_VERSION << IPV4_VERSION_SHIFT) | IPV4_IHL_MIN_WORDS;
-    iph.total_length = htons(PROBE_LEN);
-    iph.id           = htons(1234);
-    iph.ttl          = 64;
-    iph.protocol     = IPPROTO_UDP;
-    iph.src_addr     = inet_addr("192.168.1.50");
-    iph.dst_addr     = inet_addr("8.8.8.8");
-    iph.checksum     = calculate_checksum(&iph, sizeof(iph));
+    uint32_t src = inet_addr("192.168.1.50");
+    uint32_t dst = inet_addr("8.8.8.8");
 
+    build_ip_header(&iph, src, dst, 64, 1234, UDP_SEGMENT_LEN);
+
+    assert(iph.ihl_version == ((IPV4_VERSION << IPV4_VERSION_SHIFT) | IPV4_IHL_MIN_WORDS));
+    assert(iph.tos == 0);
+    assert(iph.total_length == htons(PROBE_LEN));
+    assert(iph.id == htons(1234));
+    assert(iph.flags_fo == 0);
+    assert(iph.ttl == 64);
+    assert(iph.protocol == IPPROTO_UDP);
+    assert(iph.src_addr == src);
+    assert(iph.dst_addr == dst);
     assert(iph.checksum != 0);
+
+    /* Verifying checksum over completed header results in zero */
     assert(calculate_checksum(&iph, sizeof(iph)) == 0);
+}
+
+static void test_udp_header_builder(void)
+{
+    udp_header_t udph;
+    uint32_t src = inet_addr("10.0.0.1");
+    uint32_t dst = inet_addr("10.0.0.2");
+    uint8_t payload[32];
+
+    memset(payload, 0xAA, sizeof(payload));
+    build_udp_header(&udph, src, dst, 40000, 33434, payload, sizeof(payload));
+
+    assert(udph.src_port == htons(40000));
+    assert(udph.dst_port == htons(33434));
+    assert(udph.length == htons(UDP_HEADER_LEN + sizeof(payload)));
+    assert(udph.checksum != 0);
+}
+
+static void test_udp_pseudo_header_checksum(void)
+{
+    uint8_t buf[PROBE_LEN];
+    uint32_t src = inet_addr("192.168.0.1");
+    uint32_t dst = inet_addr("8.8.4.4");
+    udp_header_t udph;
+    uint16_t computed_cksum;
+
+    /* Verify exact 12-byte layout according to RFC 768 / RFC 793 */
+    assert(sizeof(pseudo_header_t) == 12);
+    assert(offsetof(pseudo_header_t, src_addr) == 0);
+    assert(offsetof(pseudo_header_t, dst_addr) == 4);
+    assert(offsetof(pseudo_header_t, zero) == 8);
+    assert(offsetof(pseudo_header_t, protocol) == 9);
+    assert(offsetof(pseudo_header_t, udp_length) == 10);
+
+    build_probe_packet(buf, src, dst, 1, 35000, 33440, 10);
+    memcpy(&udph, buf + IP_HEADER_LEN, sizeof(udph));
+    assert(udph.checksum != 0);
+
+    /* Recalculating directly with calculate_udp_checksum should match */
+    computed_cksum = calculate_udp_checksum(src, dst, buf + IP_HEADER_LEN,
+                                            UDP_SEGMENT_LEN);
+    assert(computed_cksum == 0);
+
+    /* Negative or oversized length guards */
+    assert(calculate_udp_checksum(src, dst, buf, -1) == 0);
+    assert(calculate_udp_checksum(src, dst, buf, 2000) == 0);
 }
 
 static void test_probe_packet_crafting(void)
@@ -103,36 +162,6 @@ static void test_probe_packet_crafting(void)
     for (i = IP_HEADER_LEN + UDP_HEADER_LEN; i < PROBE_LEN; i++) {
         assert(buf[i] == 0x00);
     }
-}
-
-static void test_udp_pseudo_header_checksum(void)
-{
-    uint8_t buf[PROBE_LEN];
-    uint32_t src = inet_addr("192.168.0.1");
-    uint32_t dst = inet_addr("8.8.4.4");
-    udp_header_t udph;
-    uint16_t computed_cksum;
-
-    /* Verify exact 12-byte layout according to RFC 768 / RFC 793 */
-    assert(sizeof(pseudo_header_t) == 12);
-    assert(offsetof(pseudo_header_t, src_addr) == 0);
-    assert(offsetof(pseudo_header_t, dst_addr) == 4);
-    assert(offsetof(pseudo_header_t, zero) == 8);
-    assert(offsetof(pseudo_header_t, protocol) == 9);
-    assert(offsetof(pseudo_header_t, udp_length) == 10);
-
-    build_probe_packet(buf, src, dst, 1, 35000, 33440, 10);
-    memcpy(&udph, buf + IP_HEADER_LEN, sizeof(udph));
-    assert(udph.checksum != 0);
-
-    /* Recalculating directly with calculate_udp_checksum should match */
-    computed_cksum = calculate_udp_checksum(src, dst, buf + IP_HEADER_LEN,
-                                            UDP_SEGMENT_LEN);
-    assert(computed_cksum == 0);
-
-    /* Negative or oversized length guards */
-    assert(calculate_udp_checksum(src, dst, buf, -1) == 0);
-    assert(calculate_udp_checksum(src, dst, buf, PROBE_LEN + 10) == 0);
 }
 
 static void test_icmp_reply_parsing(void)
@@ -225,16 +254,22 @@ static void test_icmp_reply_parsing(void)
 
 int main(void)
 {
-    printf("=== Running Tier A Unit Tests (packet.c) ===\n");
+    printf("=== Running Tier A Unit Tests (Modular Protocol Engine) ===\n");
 
     test_rfc1071_checksum();
     printf("  [PASS] RFC 1071 checksum & carry wraparound\n");
 
-    test_probe_packet_crafting();
-    printf("  [PASS] Handcrafted 60-byte probe assembly\n");
+    test_ip_header_builder();
+    printf("  [PASS] IPv4 header builder & RFC 791 validation\n");
+
+    test_udp_header_builder();
+    printf("  [PASS] UDP header builder & RFC 768 validation\n");
 
     test_udp_pseudo_header_checksum();
     printf("  [PASS] UDP pseudo-header checksum calculation\n");
+
+    test_probe_packet_crafting();
+    printf("  [PASS] Handcrafted 60-byte probe facade assembly\n");
 
     test_icmp_reply_parsing();
     printf("  [PASS] ICMP reply parsing, demuxing & bounds defense\n");
