@@ -8,10 +8,26 @@ BIN_DIR = $(BUILD_DIR)/bin
 OBJ_DIR = $(BUILD_DIR)/obj
 
 TARGET = $(BIN_DIR)/traceroute
-SRCS = $(SRC_DIR)/traceroute.c $(SRC_DIR)/packet.c $(SRC_DIR)/cli.c $(SRC_DIR)/network.c $(SRC_DIR)/probe.c
+SRCS = $(SRC_DIR)/checksum.c \
+       $(SRC_DIR)/ip_header.c \
+       $(SRC_DIR)/udp_header.c \
+       $(SRC_DIR)/icmp_header.c \
+       $(SRC_DIR)/packet.c \
+       $(SRC_DIR)/raw_socket.c \
+       $(SRC_DIR)/probe.c \
+       $(SRC_DIR)/network.c \
+       $(SRC_DIR)/cli.c \
+       $(SRC_DIR)/traceroute.c
+
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
 
 TEST_BIN = $(BIN_DIR)/test_packet
+TEST_OBJS = $(OBJ_DIR)/test_packet.o \
+            $(OBJ_DIR)/checksum.o \
+            $(OBJ_DIR)/ip_header.o \
+            $(OBJ_DIR)/udp_header.o \
+            $(OBJ_DIR)/icmp_header.o \
+            $(OBJ_DIR)/packet.o
 
 .PHONY: all clean test test-integration
 
@@ -26,11 +42,11 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/test_packet.o: $(TESTS_DIR)/test_packet.c $(SRC_DIR)/packet.h
+$(OBJ_DIR)/test_packet.o: $(TESTS_DIR)/test_packet.c $(SRC_DIR)/packet.h $(SRC_DIR)/checksum.h $(SRC_DIR)/ip_header.h $(SRC_DIR)/udp_header.h $(SRC_DIR)/icmp_header.h
 	@mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -I$(SRC_DIR) -c $< -o $@
 
-$(TEST_BIN): $(OBJ_DIR)/test_packet.o $(OBJ_DIR)/packet.o
+$(TEST_BIN): $(TEST_OBJS)
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^
 
