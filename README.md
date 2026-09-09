@@ -157,16 +157,17 @@ tool against itself. The expected causes:
 
 | Path | Contents |
 |------|----------|
-| `src/checksum.c` / `src/checksum.h` | RFC 1071 Internet Checksum & UDP pseudo-header calculation |
-| `src/ip_header.c` / `src/ip_header.h` | RFC 791 IPv4 header layout & explicit builder |
-| `src/udp_header.c` / `src/udp_header.h` | RFC 768 UDP header layout, builder & checksum with zero-substitution rule |
-| `src/icmp_header.c` / `src/icmp_header.h` | RFC 792 ICMP header layout & reply parser with inner port demuxing |
-| `src/packet.c` / `src/packet.h` | Datagram facade: assembles complete 60-byte UDP probe |
-| `src/raw_socket.c` / `src/raw_socket.h` | Low-level raw socket operations (IP_HDRINCL send, ICMP receive, queue drain) |
-| `src/probe.c` / `src/probe.h` | Hop probe orchestrator, monotonic RTT, integer `select()` deadline loop |
-| `src/network.c` / `src/network.h` | DNS resolution (`getaddrinfo`), kernel routing table egress IP discovery, address formatting |
-| `src/cli.c` / `src/cli.h` | CLI argument parsing via `getopt()`, range validation, usage banner |
-| `src/traceroute.c` | Top-level CLI entry point, hop loop, ECMP formatting, signal handling |
+| `src/proto/checksum.c` / `.h` | RFC 1071 Internet Checksum & zero-allocation UDP pseudo-header calculation |
+| `src/proto/ip_header.c` / `.h` | RFC 791 IPv4 header layout & explicit builder |
+| `src/proto/udp_header.c` / `.h` | RFC 768 UDP header layout, builder & checksum with zero-substitution rule |
+| `src/proto/icmp_header.c` / `.h` | RFC 792 ICMP header layout & reply parser with inner port demuxing |
+| `src/proto/packet.c` / `.h` | Datagram facade: assembles complete 60-byte UDP probe |
+| `src/engine/raw_socket.c` / `.h` | Low-level raw socket operations (IP_HDRINCL send, ICMP receive, queue drain) |
+| `src/engine/probe.c` / `.h` | Hop probe orchestrator, monotonic RTT, pacing helper, responsive select |
+| `src/engine/network.c` / `.h` | DNS resolution (`getaddrinfo`), kernel routing egress discovery, DRY formatting |
+| `src/app/cli.c` / `.h` | CLI argument parsing via `getopt()`, range validation, usage banner |
+| `src/app/display.c` / `.h` | Console presentation layer, ECMP route change tracking, RTT display |
+| `src/app/traceroute.c` | Top-level CLI entry point, hop loop orchestration, signal handling |
 | `Makefile` | Build targets: `make`, `make test`, `make test-integration`, `make clean` |
 | `tests/test_packet.c` | Tier A automated unit test suite (checksums, IP, UDP, ICMP parsing, facade) |
 | `tests/test_cli.sh` | Tier B automated CLI parameter bounds and permissions test suite |
