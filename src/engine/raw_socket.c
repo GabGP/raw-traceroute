@@ -1,8 +1,8 @@
 /*
  * raw_socket.c - Low-level raw socket lifecycle and I/O.
  *
- * Implements socket creation for RAW IPv4 with IP_HDRINCL and ICMP listener,
- * queue flushing, raw datagram transmission, and resource cleanup.
+ * Implements raw socket allocation, IP_HDRINCL option configuration,
+ * unread input queue draining, and datagram transmission via sendto.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -19,17 +19,17 @@
 
 int raw_socket_create_send(void)
 {
-    int fd, on = 1;
+    int fd, on = SOCK_OPT_ENABLE;
 
     fd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
     if (fd < 0) {
-        perror("traceroute: socket(SOCK_RAW, IPPROTO_RAW)");
-        return -1;
+        perror("[raw_socket] Error creating raw send socket (are you running as root?)");
+        return RAW_SOCKET_ERROR;
     }
     if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on)) < 0) {
-        perror("traceroute: setsockopt(IP_HDRINCL)");
+        perror("[raw_socket] Error setting setsockopt(IP_HDRINCL)");
         close(fd);
-        return -1;
+        return RAW_SOCKET_ERROR;
     }
     return fd;
 }
@@ -38,8 +38,8 @@ int raw_socket_create_recv(void)
 {
     int fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (fd < 0) {
-        perror("traceroute: socket(SOCK_RAW, IPPROTO_ICMP)");
-        return -1;
+        perror("[raw_socket] Error creating raw ICMP receive socket (are you running as root?)");
+        return RAW_SOCKET_ERROR;
     }
     return fd;
 }
@@ -60,17 +60,19 @@ int raw_socket_send(int send_fd, const void *packet, size_t packet_len,
     to.sin_family = AF_INET;
     to.sin_addr   = dst_ip;
 
-    if (sendto(send_fd, packet, packet_len, 0,
+    if (sendto(send_fd, packet, packet_len, SENDTO_FLAGS_DEFAULT,
                (struct sockaddr *)&to, sizeof(to)) != (ssize_t)packet_len) {
-        return -1;
+        perror("[raw_socket] Error in sendto");
+        return RAW_SOCKET_ERROR;
     }
-    return 0;
+    return RAW_SOCKET_SUCCESS;
 }
 
 void raw_socket_close(int *fd)
 {
     if (fd && *fd >= 0) {
         close(*fd);
-        *fd = -1;
+        *fd = INVALID_SOCKET_FD;
     }
 }
+

@@ -15,7 +15,13 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#define ROUTE_DISCOVERY_PORT 33434
+#define ROUTE_DISCOVERY_PORT    33434
+#define NETWORK_SUCCESS         0
+#define NETWORK_ERROR           (-1)
+#define SOCKET_DEFAULT_PROTOCOL 0
+#define GETADDRINFO_SUCCESS     0
+#define GETNAMEINFO_SUCCESS     0
+#define GETNAMEINFO_FLAGS_NONE  0
 
 #ifndef NI_MAXHOST
 #define NI_MAXHOST 1025

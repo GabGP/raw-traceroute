@@ -1,8 +1,8 @@
 /*
- * checksum.c - RFC 1071 Internet Checksum implementation.
+ * checksum.c - Internet checksum (RFC 1071) calculation and UDP pseudo-header.
  *
- * Implements 16-bit one's complement addition with 32-bit carry folding
- * and UDP pseudo-header checksum generation according to RFC 768 / RFC 1071.
+ * Implements 16-bit one's complement addition with 32-bit carry folding,
+ * and builds temporary IPv4 pseudo-headers for transport checksums.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -10,28 +10,22 @@
 
 #include "checksum.h"
 
+#include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#define MAX_PSEUDO_SEGMENT_LEN 1480
-
 uint16_t calculate_checksum(const void *buffer, int size)
 {
-    const uint8_t *p = (const uint8_t *)buffer;
+    const uint16_t *buf = (const uint16_t *)buffer;
     unsigned long sum = 0;
-    uint16_t word;
 
-    while (size > 1) {
-        memcpy(&word, p, sizeof(word));
-        sum += word;
-        p += sizeof(word);
-        size -= (int)sizeof(word);
+    while (size > CKSUM_ODD_BYTE_LEN) {
+        sum += *buf++;
+        size -= CKSUM_WORD_BYTES;
     }
-    if (size == 1) {
-        uint16_t odd = 0;
-        memcpy(&odd, p, 1);
-        sum += odd;
+    if (size == CKSUM_ODD_BYTE_LEN) {
+        sum += *(const uint8_t *)buf;
     }
 
     while (sum >> CKSUM_SHIFT) {
@@ -44,23 +38,30 @@ uint16_t calculate_checksum(const void *buffer, int size)
 uint16_t calculate_udp_checksum(uint32_t src_addr, uint32_t dst_addr,
                                 const void *udp_segment, int udp_segment_len)
 {
-    uint8_t pseudo_packet[sizeof(pseudo_header_t) + MAX_PSEUDO_SEGMENT_LEN];
-    pseudo_header_t psh;
-    int total_len;
-
-    if (udp_segment_len < 0 || udp_segment_len > MAX_PSEUDO_SEGMENT_LEN) {
+    if (udp_segment_len < 0 || udp_segment_len > MAX_UDP_SEGMENT_LEN) {
         return 0;
     }
-    total_len = (int)sizeof(pseudo_header_t) + udp_segment_len;
 
-    psh.src_addr   = src_addr;
-    psh.dst_addr   = dst_addr;
-    psh.zero       = 0;
-    psh.protocol   = IPPROTO_UDP;
-    psh.udp_length = htons((uint16_t)udp_segment_len);
+    int total_len = (int)sizeof(pseudo_header_t) + udp_segment_len;
 
-    memcpy(pseudo_packet, &psh, sizeof(psh));
-    memcpy(pseudo_packet + sizeof(psh), udp_segment, (size_t)udp_segment_len);
+    uint8_t *pseudo_packet = malloc(total_len);
+    if (!pseudo_packet) {
+        return 0;
+    }
 
-    return calculate_checksum(pseudo_packet, total_len);
+    pseudo_header_t *psh = (pseudo_header_t *)pseudo_packet;
+    psh->src_addr   = src_addr;
+    psh->dst_addr   = dst_addr;
+    psh->zero       = PSEUDO_ZERO_BYTE;
+    psh->protocol   = IPPROTO_UDP;
+    psh->udp_length = htons((uint16_t)udp_segment_len);
+
+    memcpy(pseudo_packet + sizeof(pseudo_header_t), udp_segment, (size_t)udp_segment_len);
+
+    uint16_t result = calculate_checksum(pseudo_packet, total_len);
+
+    free(pseudo_packet);
+    return result;
 }
+
+

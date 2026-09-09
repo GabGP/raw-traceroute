@@ -28,8 +28,15 @@
 #define NS_PER_US_LONG       1000L
 
 #ifndef CLOCK_MONOTONIC
-#define CLOCK_MONOTONIC      1
+#define CLOCK_MONOTONIC         1
 #endif
+
+#define PROBE_REPLY_RECEIVED    1
+#define PROBE_REPLY_TIMEOUT     0
+#define PROBE_ENGINE_SUCCESS    0
+#define PROBE_ENGINE_ERROR      (-1)
+#define SELECT_TIMEOUT_ZERO     0
+#define RECVFROM_FLAGS_DEFAULT  0
 
 typedef struct {
     int send_fd;

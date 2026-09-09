@@ -27,13 +27,13 @@ int network_resolve_target(const char *host, struct in_addr *dst_addr)
     hints.ai_socktype = SOCK_DGRAM;
 
     rc = getaddrinfo(host, NULL, &hints, &res);
-    if (rc != 0) {
+    if (rc != GETADDRINFO_SUCCESS) {
         fprintf(stderr, "traceroute: unknown host %s (%s)\n", host, gai_strerror(rc));
-        return -1;
+        return NETWORK_ERROR;
     }
     *dst_addr = ((struct sockaddr_in *)res->ai_addr)->sin_addr;
     freeaddrinfo(res);
-    return 0;
+    return NETWORK_SUCCESS;
 }
 
 int network_get_source_addr(struct in_addr dst_addr, struct in_addr *src_addr)
@@ -42,9 +42,9 @@ int network_get_source_addr(struct in_addr dst_addr, struct in_addr *src_addr)
     socklen_t len = sizeof(sa);
     int fd;
 
-    fd = socket(AF_INET, SOCK_DGRAM, 0);
+    fd = socket(AF_INET, SOCK_DGRAM, SOCKET_DEFAULT_PROTOCOL);
     if (fd < 0) {
-        return -1;
+        return NETWORK_ERROR;
     }
     memset(&sa, 0, sizeof(sa));
     sa.sin_family = AF_INET;
@@ -54,11 +54,11 @@ int network_get_source_addr(struct in_addr dst_addr, struct in_addr *src_addr)
     if (connect(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0 ||
         getsockname(fd, (struct sockaddr *)&sa, &len) < 0) {
         close(fd);
-        return -1;
+        return NETWORK_ERROR;
     }
     close(fd);
     *src_addr = sa.sin_addr;
-    return 0;
+    return NETWORK_SUCCESS;
 }
 
 void network_format_addr(struct in_addr addr, int numeric, char *buf, size_t buflen)
@@ -77,7 +77,7 @@ void network_format_addr(struct in_addr addr, int numeric, char *buf, size_t buf
     sa.sin_family = AF_INET;
     sa.sin_addr   = addr;
     if (getnameinfo((struct sockaddr *)&sa, sizeof(sa), host, sizeof(host),
-                    NULL, 0, NI_NAMEREQD) == 0) {
+                    NULL, GETNAMEINFO_FLAGS_NONE, NI_NAMEREQD) == GETNAMEINFO_SUCCESS) {
         snprintf(buf, buflen, "%s (%s)", host, ip);
     } else {
         snprintf(buf, buflen, "%s (%s)", ip, ip);

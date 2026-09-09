@@ -32,23 +32,23 @@ void probe_engine_close(probe_engine_t *engine)
 
 int probe_engine_init(probe_engine_t *engine, struct in_addr src, struct in_addr dst)
 {
-    engine->send_fd  = -1;
-    engine->recv_fd  = -1;
+    engine->send_fd  = INVALID_SOCKET_FD;
+    engine->recv_fd  = INVALID_SOCKET_FD;
     engine->src_ip   = src;
     engine->dst_ip   = dst;
     engine->src_port = (uint16_t)((getpid() & PID_PORT_MASK) | PID_PORT_OFFSET);
 
     engine->send_fd = raw_socket_create_send();
     if (engine->send_fd < 0) {
-        return -1;
+        return PROBE_ENGINE_ERROR;
     }
 
     engine->recv_fd = raw_socket_create_recv();
     if (engine->recv_fd < 0) {
         probe_engine_close(engine);
-        return -1;
+        return PROBE_ENGINE_ERROR;
     }
-    return 0;
+    return PROBE_ENGINE_SUCCESS;
 }
 
 int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_id)
@@ -88,7 +88,7 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
             sec--;
             nsec += NS_PER_SEC_LONG;
         }
-        if (sec < 0 || (sec == 0 && nsec <= 0)) return 0;
+        if (sec < 0 || (sec == 0 && nsec <= 0)) return PROBE_REPLY_TIMEOUT;
 
         tv.tv_sec  = sec;
         tv.tv_usec = (suseconds_t)(nsec / NS_PER_US_LONG);
@@ -98,15 +98,16 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
         rc = select(engine->recv_fd + 1, &rfds, NULL, NULL, &tv);
         if (rc < 0) {
             if (errno == EINTR) continue;
-            return 0;
+            return PROBE_REPLY_TIMEOUT;
         }
-        if (rc == 0) return 0;
+        if (rc == SELECT_TIMEOUT_ZERO) return PROBE_REPLY_TIMEOUT;
 
         slen = sizeof(sa);
-        n = recvfrom(engine->recv_fd, buf, sizeof(buf), 0, (struct sockaddr *)&sa, &slen);
+        n = recvfrom(engine->recv_fd, buf, sizeof(buf), RECVFROM_FLAGS_DEFAULT,
+                     (struct sockaddr *)&sa, &slen);
         if (n < 0) {
             if (errno == EINTR) continue;
-            return 0;
+            return PROBE_REPLY_TIMEOUT;
         }
         clock_gettime(CLOCK_MONOTONIC, &now);
 
@@ -115,6 +116,6 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
 
         *from   = sa.sin_addr;
         *rtt_ms = probe_elapsed_ms(sent, &now);
-        return 1;
+        return PROBE_REPLY_RECEIVED;
     }
 }

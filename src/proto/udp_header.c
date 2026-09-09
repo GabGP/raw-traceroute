@@ -15,8 +15,6 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#define MAX_UDP_SEGMENT_LEN 1480
-
 void build_udp_header(udp_header_t *udph, uint32_t src_addr, uint32_t dst_addr,
                       uint16_t src_port, uint16_t dst_port,
                       const void *payload, uint16_t payload_len)
@@ -29,7 +27,7 @@ void build_udp_header(udp_header_t *udph, uint32_t src_addr, uint32_t dst_addr,
     udph->src_port = htons(src_port);
     udph->dst_port = htons(dst_port);
     udph->length   = htons(udp_len);
-    udph->checksum = 0;
+    udph->checksum = UDP_INITIAL_CHECKSUM;
 
     if (udp_len > MAX_UDP_SEGMENT_LEN) {
         return;
@@ -41,8 +39,10 @@ void build_udp_header(udp_header_t *udph, uint32_t src_addr, uint32_t dst_addr,
     }
 
     cksum = calculate_udp_checksum(src_addr, dst_addr, segment, (int)udp_len);
-    if (cksum == 0) {
+    /* RFC 768: If computed checksum is 0, it is transmitted as all ones (0xFFFF) */
+    if (cksum == UDP_CKSUM_COMPUTED_ZERO) {
         cksum = UDP_CKSUM_ZERO_SUBSTITUTE;
     }
     udph->checksum = cksum;
 }
+

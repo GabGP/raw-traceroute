@@ -23,15 +23,22 @@
 #include "network.h"
 #include "probe.h"
 
-#define SHELL_EXIT_BASE      128
-#define EXIT_INTERRUPTED     (SHELL_EXIT_BASE + SIGINT)
+#define SHELL_EXIT_BASE         128
+#define EXIT_INTERRUPTED        (SHELL_EXIT_BASE + SIGINT)
+#define ROOT_UID                0
+#define PROBE_LAST_INDEX_OFFSET 1
+#define INITIAL_DONE_STATE      0
+#define TERMINAL_DONE_STATE     1
+#define SIGNAL_SET_STATE        1
+#define HOP_NOT_SEEN            0
+#define HOP_SEEN                1
 
 static volatile sig_atomic_t g_interrupted = 0;
 
 static void handle_signal(int sig)
 {
     (void)sig;
-    g_interrupted = 1;
+    g_interrupted = SIGNAL_SET_STATE;
 }
 
 int main(int argc, char **argv)
@@ -41,7 +48,7 @@ int main(int argc, char **argv)
     struct in_addr dst_addr, src_addr, last_addr, from;
     char dst_ip[INET_ADDRSTRLEN], label[LABEL_BUFFER_SIZE];
     uint16_t dst_port = PROBE_BASE_PORT, ip_id = INITIAL_IP_ID;
-    int ttl, q, have_last, done = 0;
+    int ttl, q, have_last = HOP_NOT_SEEN, done = INITIAL_DONE_STATE;
     struct timespec sent, pause;
     icmp_reply_t reply;
     double rtt = 0.0;
@@ -57,7 +64,7 @@ int main(int argc, char **argv)
     sigaction(SIGTERM, &sa, NULL);
 
     /* 2. Enforce CAP_NET_RAW root privileges before opening raw sockets */
-    if (geteuid() != 0) {
+    if (geteuid() != ROOT_UID) {
         fprintf(stderr, "traceroute: raw sockets require root privileges; run it with sudo\n");
         return EXIT_FAILURE;
     }
@@ -79,7 +86,7 @@ int main(int argc, char **argv)
     /* 5. Hop loop: increment TTL from first_ttl up to max_ttl */
     for (ttl = cfg.first_ttl; ttl <= cfg.max_ttl && !done && !g_interrupted; ttl++) {
         last_addr.s_addr = 0;
-        have_last = 0;
+        have_last = HOP_NOT_SEEN;
         printf("%2d ", ttl);
         fflush(stdout);
 
@@ -103,14 +110,14 @@ int main(int argc, char **argv)
                     network_format_addr(from, cfg.numeric, label, sizeof(label));
                     printf(" %s", label);
                     last_addr = from;
-                    have_last = 1;
+                    have_last = HOP_SEEN;
                 }
                 printf("  %.3f ms", rtt);
 
                 /* Destination reached: port unreachable (normal) or delivery error */
                 if (reply.type == ICMP_DEST_UNREACH) {
                     if (reply.code != ICMP_PORT_UNREACH_CODE) printf(" !%d", reply.code);
-                    done = 1;
+                    done = TERMINAL_DONE_STATE;
                 }
             }
             fflush(stdout);
@@ -118,7 +125,7 @@ int main(int argc, char **argv)
             dst_port++;
             /* Pause between consecutive probes if configured and more probes follow */
             if (cfg.sendwait_ms > 0 && !done && !g_interrupted &&
-                (q < cfg.nqueries - 1 || ttl < cfg.max_ttl)) {
+                (q < cfg.nqueries - PROBE_LAST_INDEX_OFFSET || ttl < cfg.max_ttl)) {
                 pause.tv_sec  = cfg.sendwait_ms / MS_PER_SEC_INT;
                 pause.tv_nsec = (long)(cfg.sendwait_ms % MS_PER_SEC_INT) * NS_PER_MS_LONG;
                 nanosleep(&pause, NULL);
