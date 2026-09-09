@@ -2,7 +2,7 @@
  * traceroute.c - Orchestrator and presentation loop for raw traceroute.
  *
  * Coordinates the outer TTL hop loop and inner probe query loop, measures RTT,
- * formats inline ECMP routing output, and halts upon reaching the destination.
+ * delegates presentation to display module, and halts upon reaching destination.
  * Zero third-party packet libraries or subprocess system calls.
  */
 
@@ -22,6 +22,7 @@
 #include "cli.h"
 #include "network.h"
 #include "probe.h"
+#include "display.h"
 
 #define SHELL_EXIT_BASE         128
 #define EXIT_INTERRUPTED        (SHELL_EXIT_BASE + SIGINT)
@@ -30,8 +31,6 @@
 #define INITIAL_DONE_STATE      0
 #define TERMINAL_DONE_STATE     1
 #define SIGNAL_SET_STATE        1
-#define HOP_NOT_SEEN            0
-#define HOP_SEEN                1
 
 static volatile sig_atomic_t g_interrupted = 0;
 
@@ -45,14 +44,13 @@ int main(int argc, char **argv)
 {
     traceroute_config_t cfg;
     probe_engine_t engine;
-    struct in_addr dst_addr, src_addr, last_addr, from;
-    char dst_ip[INET_ADDRSTRLEN], label[LABEL_BUFFER_SIZE];
+    struct in_addr dst_addr, src_addr, from;
+    char dst_ip[INET_ADDRSTRLEN];
     uint16_t dst_port = PROBE_BASE_PORT, ip_id = INITIAL_IP_ID;
-    int ttl, q, have_last = HOP_NOT_SEEN, done = INITIAL_DONE_STATE;
-    struct timespec sent, pause;
+    int ttl, q, done = INITIAL_DONE_STATE;
+    struct timespec sent;
     icmp_reply_t reply;
     double rtt = 0.0;
-
     struct sigaction sa;
 
     /* 1. Parse command-line flags and validate parameter bounds */
@@ -77,18 +75,14 @@ int main(int argc, char **argv)
     }
 
     inet_ntop(AF_INET, &dst_addr, dst_ip, sizeof(dst_ip));
-    printf("traceroute to %s (%s), %d hops max, %d byte packets\n",
-           cfg.host, dst_ip, cfg.max_ttl, PROBE_LEN);
+    display_header(cfg.host, dst_ip, cfg.max_ttl, PROBE_LEN);
 
     /* 4. Initialize probe engine: open raw sockets and derive source port */
     if (probe_engine_init(&engine, src_addr, dst_addr) < 0) return EXIT_FAILURE;
 
     /* 5. Hop loop: increment TTL from first_ttl up to max_ttl */
     for (ttl = cfg.first_ttl; ttl <= cfg.max_ttl && !done && !g_interrupted; ttl++) {
-        last_addr.s_addr = 0;
-        have_last = HOP_NOT_SEEN;
-        printf("%2d ", ttl);
-        fflush(stdout);
+        display_hop_start(ttl);
 
         /* Send nqueries probes for the current hop */
         for (q = 0; q < cfg.nqueries; q++) {
@@ -102,37 +96,23 @@ int main(int argc, char **argv)
             }
 
             /* Wait for matching ICMP reply until timeout */
-            if (!probe_wait_reply(&engine, &sent, cfg.waittime_s, dst_port, &from, &reply, &rtt)) {
-                printf(" *"); /* Probe timed out */
+            if (!probe_wait_reply(&engine, &sent, cfg.waittime_s, dst_port, &from, &reply, &rtt, &g_interrupted)) {
+                display_probe_timeout();
             } else {
-                /* Print address label on first reply or when ECMP changes path */
-                if (!have_last || from.s_addr != last_addr.s_addr) {
-                    network_format_addr(from, cfg.numeric, label, sizeof(label));
-                    printf(" %s", label);
-                    last_addr = from;
-                    have_last = HOP_SEEN;
-                }
-                printf("  %.3f ms", rtt);
-
-                /* Destination reached: port unreachable (normal) or delivery error */
+                display_probe_reply(from, rtt, &reply, cfg.numeric);
                 if (reply.type == ICMP_DEST_UNREACH) {
-                    if (reply.code != ICMP_PORT_UNREACH_CODE) printf(" !%d", reply.code);
                     done = TERMINAL_DONE_STATE;
                 }
             }
-            fflush(stdout);
 
             dst_port++;
             /* Pause between consecutive probes if configured and more probes follow */
             if (cfg.sendwait_ms > 0 && !done && !g_interrupted &&
                 (q < cfg.nqueries - PROBE_LAST_INDEX_OFFSET || ttl < cfg.max_ttl)) {
-                pause.tv_sec  = cfg.sendwait_ms / MS_PER_SEC_INT;
-                pause.tv_nsec = (long)(cfg.sendwait_ms % MS_PER_SEC_INT) * NS_PER_MS_LONG;
-                nanosleep(&pause, NULL);
+                probe_sleep_ms(cfg.sendwait_ms);
             }
         }
-        printf("\n");
-        fflush(stdout);
+        display_hop_end();
     }
 
     /* 6. Clean up socket descriptors */
