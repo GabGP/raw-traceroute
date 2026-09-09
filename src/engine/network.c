@@ -76,10 +76,8 @@ void network_format_addr(struct in_addr addr, int numeric, char *buf, size_t buf
     memset(&sa, 0, sizeof(sa));
     sa.sin_family = AF_INET;
     sa.sin_addr   = addr;
-    if (getnameinfo((struct sockaddr *)&sa, sizeof(sa), host, sizeof(host),
-                    NULL, GETNAMEINFO_FLAGS_NONE, NI_NAMEREQD) == GETNAMEINFO_SUCCESS) {
-        snprintf(buf, buflen, "%s (%s)", host, ip);
-    } else {
-        snprintf(buf, buflen, "%s (%s)", ip, ip);
-    }
+    const char *name = (getnameinfo((struct sockaddr *)&sa, sizeof(sa), host, sizeof(host),
+                                    NULL, GETNAMEINFO_FLAGS_NONE, NI_NAMEREQD) == GETNAMEINFO_SUCCESS)
+                       ? host : ip;
+    snprintf(buf, buflen, "%s (%s)", name, ip);
 }
