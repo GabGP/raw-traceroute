@@ -62,7 +62,6 @@ int raw_socket_send(int send_fd, const void *packet, size_t packet_len,
 
     if (sendto(send_fd, packet, packet_len, SENDTO_FLAGS_DEFAULT,
                (struct sockaddr *)&to, sizeof(to)) != (ssize_t)packet_len) {
-        perror("[raw_socket] Error in sendto");
         return RAW_SOCKET_ERROR;
     }
     return RAW_SOCKET_SUCCESS;
