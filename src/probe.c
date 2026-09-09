@@ -1,8 +1,8 @@
 /*
- * probe.c - Raw socket lifecycle, packet transmission, and reply listener.
+ * probe.c - Probe orchestration and event-driven reply listener.
  *
- * Handles creation of raw sockets with IP_HDRINCL, sends handcrafted UDP
- * probes, and awaits correlated ICMP replies using select() with monotonic RTT.
+ * Coordinates probe packet creation and transmission via raw_socket,
+ * and awaits correlated ICMP replies using select() with monotonic RTT.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -26,66 +26,40 @@ double probe_elapsed_ms(const struct timespec *from, const struct timespec *to)
 
 void probe_engine_close(probe_engine_t *engine)
 {
-    if (engine->send_fd >= 0) { close(engine->send_fd); engine->send_fd = -1; }
-    if (engine->recv_fd >= 0) { close(engine->recv_fd); engine->recv_fd = -1; }
+    raw_socket_close(&engine->send_fd);
+    raw_socket_close(&engine->recv_fd);
 }
 
 int probe_engine_init(probe_engine_t *engine, struct in_addr src, struct in_addr dst)
 {
-    int on = 1;
-
     engine->send_fd  = -1;
     engine->recv_fd  = -1;
     engine->src_ip   = src;
     engine->dst_ip   = dst;
     engine->src_port = (uint16_t)((getpid() & PID_PORT_MASK) | PID_PORT_OFFSET);
 
-    engine->send_fd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+    engine->send_fd = raw_socket_create_send();
     if (engine->send_fd < 0) {
-        perror("traceroute: socket(SOCK_RAW, IPPROTO_RAW)");
-        return -1;
-    }
-    if (setsockopt(engine->send_fd, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on)) < 0) {
-        perror("traceroute: setsockopt(IP_HDRINCL)");
-        probe_engine_close(engine);
         return -1;
     }
 
-    engine->recv_fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    engine->recv_fd = raw_socket_create_recv();
     if (engine->recv_fd < 0) {
-        perror("traceroute: socket(SOCK_RAW, IPPROTO_ICMP)");
         probe_engine_close(engine);
         return -1;
     }
     return 0;
-}
-
-void probe_drain_replies(probe_engine_t *engine)
-{
-    uint8_t dummy[RECV_BUFFER_SIZE];
-    while (recvfrom(engine->recv_fd, dummy, sizeof(dummy), MSG_DONTWAIT, NULL, NULL) > 0) {
-    }
 }
 
 int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_id)
 {
     uint8_t buf[PROBE_LEN] __attribute__((aligned(4)));
-    struct sockaddr_in to;
 
-    probe_drain_replies(engine);
+    raw_socket_drain(engine->recv_fd);
     build_probe_packet(buf, engine->src_ip.s_addr, engine->dst_ip.s_addr,
                        (uint8_t)ttl, engine->src_port, dst_port, ip_id);
 
-    memset(&to, 0, sizeof(to));
-    to.sin_family = AF_INET;
-    to.sin_addr   = engine->dst_ip;
-    to.sin_port   = htons(dst_port);
-
-    if (sendto(engine->send_fd, buf, PROBE_LEN, 0,
-               (struct sockaddr *)&to, sizeof(to)) != PROBE_LEN) {
-        return -1;
-    }
-    return 0;
+    return raw_socket_send(engine->send_fd, buf, PROBE_LEN, engine->dst_ip);
 }
 
 int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int timeout_s,
