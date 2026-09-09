@@ -17,11 +17,11 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#include "../src/checksum.h"
-#include "../src/ip_header.h"
-#include "../src/udp_header.h"
-#include "../src/icmp_header.h"
-#include "../src/packet.h"
+#include "checksum.h"
+#include "ip_header.h"
+#include "udp_header.h"
+#include "icmp_header.h"
+#include "packet.h"
 
 #define TEST_SAMPLE_TTL          12
 #define TEST_SAMPLE_SRC_PORT     45678
