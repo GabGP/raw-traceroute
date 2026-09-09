@@ -157,13 +157,18 @@ tool against itself. The expected causes:
 
 | Path | Contents |
 |------|----------|
-| `src/traceroute.c` | Top-level orchestrator and console presentation loop |
-| `src/packet.c` / `src/packet.h` | IP/UDP/ICMP structs, RFC 1071 checksums, 60-byte probe builder, ICMP reply parser |
-| `src/cli.c` / `src/cli.h` | CLI argument parsing via `getopt()`, range validation, usage banner |
+| `src/checksum.c` / `src/checksum.h` | RFC 1071 Internet Checksum & UDP pseudo-header calculation |
+| `src/ip_header.c` / `src/ip_header.h` | RFC 791 IPv4 header layout & explicit builder |
+| `src/udp_header.c` / `src/udp_header.h` | RFC 768 UDP header layout, builder & checksum with zero-substitution rule |
+| `src/icmp_header.c` / `src/icmp_header.h` | RFC 792 ICMP header layout & reply parser with inner port demuxing |
+| `src/packet.c` / `src/packet.h` | Datagram facade: assembles complete 60-byte UDP probe |
+| `src/raw_socket.c` / `src/raw_socket.h` | Low-level raw socket operations (IP_HDRINCL send, ICMP receive, queue drain) |
+| `src/probe.c` / `src/probe.h` | Hop probe orchestrator, monotonic RTT, integer `select()` deadline loop |
 | `src/network.c` / `src/network.h` | DNS resolution (`getaddrinfo`), kernel routing table egress IP discovery, address formatting |
-| `src/probe.c` / `src/probe.h` | Raw socket lifecycle, packet transmission, event-driven `select()` wait loop, RTT timing |
+| `src/cli.c` / `src/cli.h` | CLI argument parsing via `getopt()`, range validation, usage banner |
+| `src/traceroute.c` | Top-level CLI entry point, hop loop, ECMP formatting, signal handling |
 | `Makefile` | Build targets: `make`, `make test`, `make test-integration`, `make clean` |
-| `tests/test_packet.c` | Tier A automated unit test suite (checksums, pseudo-headers, ICMP parsing) |
+| `tests/test_packet.c` | Tier A automated unit test suite (checksums, IP, UDP, ICMP parsing, facade) |
 | `tests/test_cli.sh` | Tier B automated CLI parameter bounds and permissions test suite |
 | `tests/test_integration.sh` | Tier C live network integration test suite (requires `sudo`) |
 | `tests/compare.sh` | Side-by-side comparison and diff against system traceroute (requires `sudo`) |
