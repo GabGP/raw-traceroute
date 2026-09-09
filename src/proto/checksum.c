@@ -43,11 +43,7 @@ uint16_t calculate_udp_checksum(uint32_t src_addr, uint32_t dst_addr,
     }
 
     int total_len = (int)sizeof(pseudo_header_t) + udp_segment_len;
-
-    uint8_t *pseudo_packet = malloc(total_len);
-    if (!pseudo_packet) {
-        return 0;
-    }
+    uint8_t pseudo_packet[sizeof(pseudo_header_t) + MAX_UDP_SEGMENT_LEN] __attribute__((aligned(4)));
 
     pseudo_header_t *psh = (pseudo_header_t *)pseudo_packet;
     psh->src_addr   = src_addr;
@@ -58,10 +54,7 @@ uint16_t calculate_udp_checksum(uint32_t src_addr, uint32_t dst_addr,
 
     memcpy(pseudo_packet + sizeof(pseudo_header_t), udp_segment, (size_t)udp_segment_len);
 
-    uint16_t result = calculate_checksum(pseudo_packet, total_len);
-
-    free(pseudo_packet);
-    return result;
+    return calculate_checksum(pseudo_packet, total_len);
 }
 
 
