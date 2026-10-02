@@ -27,10 +27,15 @@
 #define SHELL_EXIT_BASE         128
 #define EXIT_INTERRUPTED        (SHELL_EXIT_BASE + SIGINT)
 #define ROOT_UID                0
-#define PROBE_LAST_INDEX_OFFSET 1
-#define INITIAL_DONE_STATE      0
-#define TERMINAL_DONE_STATE     1
 #define SIGNAL_SET_STATE        1
+
+/* What the hop loop should do after one hop has been traced */
+typedef enum {
+    HOP_CONTINUE,       /* keep going with the next TTL */
+    HOP_REACHED,        /* destination answered (ICMP unreachable): stop */
+    HOP_INTERRUPTED,    /* SIGINT/SIGTERM received: stop */
+    HOP_FAILED          /* probe could not be sent: stop with an error */
+} hop_status_t;
 
 static volatile sig_atomic_t g_interrupted = 0;
 
@@ -40,18 +45,63 @@ static void handle_signal(int sig)
     g_interrupted = SIGNAL_SET_STATE;
 }
 
+/*
+ * Sends cfg->nqueries probes for one TTL and prints the hop row.
+ * dst_port and ip_id advance once per probe and persist across hops.
+ * Pacing: -z pause after a probe unless it is the last one of the trace.
+ */
+static hop_status_t trace_hop(probe_engine_t *engine, const traceroute_config_t *cfg,
+                              int ttl, uint16_t *dst_port, uint16_t *ip_id)
+{
+    struct in_addr from;
+    struct timespec sent;
+    icmp_reply_t reply;
+    probe_result_t wait = PROBE_TIMEOUT;
+    double rtt = 0.0;
+    int reached = 0, q;
+
+    display_hop_start(ttl);
+    for (q = 0; q < cfg->nqueries && !g_interrupted; q++) {
+        if (probe_send(engine, ttl, *dst_port, (*ip_id)++, &sent) < 0) {
+            printf("\n");
+            perror("traceroute: sendto");
+            return HOP_FAILED;
+        }
+
+        wait = probe_wait_reply(engine, &sent, cfg->waittime_s, *dst_port, &from, &reply, &rtt);
+        if (wait == PROBE_INTERRUPTED) {
+            break;  /* Ctrl-C: end the row without a '*' */
+        } else if (wait == PROBE_TIMEOUT) {
+            display_probe_timeout();
+        } else {
+            display_probe_reply(from, rtt, &reply, cfg->numeric);
+            if (reply.type == ICMP_DEST_UNREACH) {
+                reached = 1;
+            }
+        }
+
+        (*dst_port)++;
+        /* Pause if more probes follow in this hop, or another hop will follow */
+        if (!g_interrupted && cfg->sendwait_ms > 0 &&
+            (q < cfg->nqueries - 1 || (!reached && ttl < cfg->max_ttl))) {
+            probe_sleep_ms(cfg->sendwait_ms);
+        }
+    }
+    display_hop_end();
+
+    if (g_interrupted || wait == PROBE_INTERRUPTED) return HOP_INTERRUPTED;
+    return reached ? HOP_REACHED : HOP_CONTINUE;
+}
+
 int main(int argc, char **argv)
 {
     traceroute_config_t cfg;
     probe_engine_t engine;
-    struct in_addr dst_addr, src_addr, from;
+    struct in_addr dst_addr, src_addr;
     char dst_ip[INET_ADDRSTRLEN];
     uint16_t dst_port = PROBE_BASE_PORT, ip_id = INITIAL_IP_ID;
-    int ttl, q, done = INITIAL_DONE_STATE;
-    struct timespec sent;
-    icmp_reply_t reply;
-    probe_result_t wait;
-    double rtt = 0.0;
+    hop_status_t status = HOP_CONTINUE;
+    int ttl;
     struct sigaction sa;
 
     /* 1. Parse command-line flags and validate parameter bounds */
@@ -82,43 +132,13 @@ int main(int argc, char **argv)
     if (probe_engine_init(&engine, src_addr, dst_addr) < 0) return EXIT_FAILURE;
 
     /* 5. Hop loop: increment TTL from first_ttl up to max_ttl */
-    for (ttl = cfg.first_ttl; ttl <= cfg.max_ttl && !done && !g_interrupted; ttl++) {
-        display_hop_start(ttl);
-
-        /* Send nqueries probes for the current hop */
-        for (q = 0; q < cfg.nqueries; q++) {
-            if (g_interrupted) break;
-            if (probe_send(&engine, ttl, dst_port, ip_id++, &sent) < 0) {
-                printf("\n");
-                perror("traceroute: sendto");
-                probe_engine_close(&engine);
-                return EXIT_FAILURE;
-            }
-
-            /* Wait for matching ICMP reply until timeout */
-            wait = probe_wait_reply(&engine, &sent, cfg.waittime_s, dst_port, &from, &reply, &rtt);
-            if (wait == PROBE_INTERRUPTED) {
-                break;  /* Ctrl-C: end the row without a '*' */
-            } else if (wait == PROBE_TIMEOUT) {
-                display_probe_timeout();
-            } else {
-                display_probe_reply(from, rtt, &reply, cfg.numeric);
-                if (reply.type == ICMP_DEST_UNREACH) {
-                    done = TERMINAL_DONE_STATE;
-                }
-            }
-
-            dst_port++;
-            /* Pause between consecutive probes if configured and more probes follow */
-            if (!g_interrupted && cfg.sendwait_ms > 0 &&
-                (q < cfg.nqueries - PROBE_LAST_INDEX_OFFSET || (!done && ttl < cfg.max_ttl))) {
-                probe_sleep_ms(cfg.sendwait_ms);
-            }
-        }
-        display_hop_end();
+    for (ttl = cfg.first_ttl; ttl <= cfg.max_ttl && !g_interrupted; ttl++) {
+        status = trace_hop(&engine, &cfg, ttl, &dst_port, &ip_id);
+        if (status != HOP_CONTINUE) break;
     }
 
     /* 6. Clean up socket descriptors */
     probe_engine_close(&engine);
+    if (status == HOP_FAILED) return EXIT_FAILURE;
     return g_interrupted ? EXIT_INTERRUPTED : EXIT_SUCCESS;
 }
