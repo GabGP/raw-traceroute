@@ -5,8 +5,9 @@
 # parameters, saving logs to tests/logs/ and displaying a side-by-side diff.
 #
 #   Usage: tests/compare.sh [HOST] [ARGS...]
-#   Default: HOST=8.8.8.8  ARGS=-n -m 20 -w 2
+#   Default: HOST=8.8.8.8  ARGS=-n -m 20 -q 3 -w 2 -z 100
 #
+# The timing flags are explicit because Linux traceroute defaults to -z 0 -w 5.
 # Both commands require root privileges because they open RAW sockets.
 
 set -u
@@ -18,7 +19,7 @@ BIN="$DIR/build/bin/traceroute"
 HOST="${1:-8.8.8.8}"
 [ $# -gt 0 ] && shift
 ARGS=("$@")
-[ ${#ARGS[@]} -eq 0 ] && ARGS=(-n -m 20 -w 2)
+[ ${#ARGS[@]} -eq 0 ] && ARGS=(-n -m 20 -q 3 -w 2 -z 100)
 
 if [ ! -x "$BIN" ]; then
     echo "compare.sh: falta $BIN, compila primero con 'make'" >&2
