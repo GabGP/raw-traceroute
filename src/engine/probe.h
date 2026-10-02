@@ -12,8 +12,6 @@
 #include <time.h>
 #include <netinet/in.h>
 
-#include <signal.h>
-
 #include "packet.h"
 #include "raw_socket.h"
 
@@ -33,12 +31,17 @@
 #define CLOCK_MONOTONIC         1
 #endif
 
-#define PROBE_REPLY_RECEIVED    1
-#define PROBE_REPLY_TIMEOUT     0
 #define PROBE_ENGINE_SUCCESS    0
 #define PROBE_ENGINE_ERROR      (-1)
 #define SELECT_TIMEOUT_ZERO     0
 #define RECVFROM_FLAGS_DEFAULT  0
+
+/* Outcome of waiting for a probe reply */
+typedef enum {
+    PROBE_TIMEOUT,      /* no matching reply before the deadline */
+    PROBE_REPLY,        /* matching ICMP reply received */
+    PROBE_INTERRUPTED   /* a signal (EINTR) cut the wait short */
+} probe_result_t;
 
 typedef struct {
     int send_fd;
@@ -56,15 +59,21 @@ void probe_engine_close(probe_engine_t *engine);
 
 /*
  * Crafts and sends a single 60-byte UDP probe with specific TTL and destination port.
+ * Stale packets are drained from the receive socket first, so replies to earlier
+ * probes cannot be mistaken for the reply to this one.
  * Writes the CLOCK_MONOTONIC send time to *sent, taken immediately before sendto().
  */
 int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_id,
                struct timespec *sent);
 
-/* Waits up to timeout_s for an ICMP reply matching dst_port and engine->src_port */
-int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int timeout_s,
+/*
+ * Waits up to timeout_s for an ICMP reply matching dst_port and engine->src_port.
+ * Returns PROBE_INTERRUPTED if a signal arrives while waiting; the caller decides
+ * whether to stop.
+ */
+probe_result_t probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int timeout_s,
                      uint16_t dst_port, struct in_addr *from, icmp_reply_t *reply,
-                     double *rtt_ms, const volatile sig_atomic_t *interrupted);
+                     double *rtt_ms);
 
 /* Pauses execution for ms milliseconds using nanosleep */
 void probe_sleep_ms(int ms);

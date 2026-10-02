@@ -65,6 +65,7 @@ int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_i
 {
     uint8_t buf[PROBE_LEN] __attribute__((aligned(4)));
 
+    /* Discard stale replies from earlier probes before sending */
     raw_socket_drain(engine->recv_fd);
     build_probe_packet(buf, engine->src_ip.s_addr, engine->dst_ip.s_addr,
                        (uint8_t)ttl, engine->src_port, dst_port, ip_id);
@@ -74,9 +75,9 @@ int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_i
     return raw_socket_send(engine->send_fd, buf, PROBE_LEN, engine->dst_ip);
 }
 
-int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int timeout_s,
-                     uint16_t dst_port, struct in_addr *from, icmp_reply_t *reply,
-                     double *rtt_ms, const volatile sig_atomic_t *interrupted)
+probe_result_t probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int timeout_s,
+                               uint16_t dst_port, struct in_addr *from, icmp_reply_t *reply,
+                               double *rtt_ms)
 {
     uint8_t buf[RECV_BUFFER_SIZE] __attribute__((aligned(4)));
     struct sockaddr_in sa;
@@ -93,7 +94,6 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
     deadline.tv_sec += timeout_s;
 
     for (;;) {
-        if (interrupted && *interrupted) return PROBE_REPLY_TIMEOUT;
         clock_gettime(CLOCK_MONOTONIC, &now);
         sec = deadline.tv_sec - now.tv_sec;
         nsec = deadline.tv_nsec - now.tv_nsec;
@@ -101,7 +101,7 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
             sec--;
             nsec += NS_PER_SEC_LONG;
         }
-        if (sec < 0 || (sec == 0 && nsec <= 0)) return PROBE_REPLY_TIMEOUT;
+        if (sec < 0 || (sec == 0 && nsec <= 0)) return PROBE_TIMEOUT;
 
         tv.tv_sec  = sec;
         tv.tv_usec = (suseconds_t)(nsec / NS_PER_US_LONG);
@@ -110,23 +110,15 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
         FD_SET(engine->recv_fd, &rfds);
         rc = select(engine->recv_fd + 1, &rfds, NULL, NULL, &tv);
         if (rc < 0) {
-            if (errno == EINTR) {
-                if (interrupted && *interrupted) return PROBE_REPLY_TIMEOUT;
-                continue;
-            }
-            return PROBE_REPLY_TIMEOUT;
+            return errno == EINTR ? PROBE_INTERRUPTED : PROBE_TIMEOUT;
         }
-        if (rc == SELECT_TIMEOUT_ZERO) return PROBE_REPLY_TIMEOUT;
+        if (rc == SELECT_TIMEOUT_ZERO) return PROBE_TIMEOUT;
 
         slen = sizeof(sa);
         n = recvfrom(engine->recv_fd, buf, sizeof(buf), RECVFROM_FLAGS_DEFAULT,
                      (struct sockaddr *)&sa, &slen);
         if (n < 0) {
-            if (errno == EINTR) {
-                if (interrupted && *interrupted) return PROBE_REPLY_TIMEOUT;
-                continue;
-            }
-            return PROBE_REPLY_TIMEOUT;
+            return errno == EINTR ? PROBE_INTERRUPTED : PROBE_TIMEOUT;
         }
         clock_gettime(CLOCK_MONOTONIC, &now);
 
@@ -135,6 +127,6 @@ int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int ti
 
         *from   = sa.sin_addr;
         *rtt_ms = probe_elapsed_ms(sent, &now);
-        return PROBE_REPLY_RECEIVED;
+        return PROBE_REPLY;
     }
 }
