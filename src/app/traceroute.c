@@ -96,6 +96,7 @@ int main(int argc, char **argv)
 
             /* Wait for matching ICMP reply until timeout */
             if (!probe_wait_reply(&engine, &sent, cfg.waittime_s, dst_port, &from, &reply, &rtt, &g_interrupted)) {
+                if (g_interrupted) break;   /* interrupted wait is not a timeout */
                 display_probe_timeout();
             } else {
                 display_probe_reply(from, rtt, &reply, cfg.numeric);
