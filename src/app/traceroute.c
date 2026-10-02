@@ -24,10 +24,7 @@
 #include "probe.h"
 #include "display.h"
 
-#define SHELL_EXIT_BASE         128
-#define EXIT_INTERRUPTED        (SHELL_EXIT_BASE + SIGINT)
-#define ROOT_UID                0
-#define SIGNAL_SET_STATE        1
+#define EXIT_INTERRUPTED        (128 + SIGINT)   /* shell convention: 128 + signal */
 
 /* What the hop loop should do after one hop has been traced */
 typedef enum {
@@ -42,7 +39,7 @@ static volatile sig_atomic_t g_interrupted = 0;
 static void handle_signal(int sig)
 {
     (void)sig;
-    g_interrupted = SIGNAL_SET_STATE;
+    g_interrupted = 1;
 }
 
 /*
@@ -114,7 +111,7 @@ int main(int argc, char **argv)
     sigaction(SIGTERM, &sa, NULL);
 
     /* 2. Enforce CAP_NET_RAW root privileges before opening raw sockets */
-    if (geteuid() != ROOT_UID) {
+    if (geteuid() != 0) {
         fprintf(stderr, "traceroute: raw sockets require root privileges; run it with sudo\n");
         return EXIT_FAILURE;
     }

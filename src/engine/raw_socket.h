@@ -12,11 +12,6 @@
 #include <netinet/in.h>
 
 #define RECV_BUFFER_SIZE        2048
-#define INVALID_SOCKET_FD       (-1)
-#define RAW_SOCKET_SUCCESS      0
-#define RAW_SOCKET_ERROR        (-1)
-#define SOCK_OPT_ENABLE         1
-#define SENDTO_FLAGS_DEFAULT    0
 
 /*
  * Creates the raw sending socket with IP_HDRINCL enabled.

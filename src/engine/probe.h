@@ -20,22 +20,6 @@
 #define PID_PORT_OFFSET      0x8000
 #define INITIAL_IP_ID        1
 
-#define MS_PER_SEC           1000.0
-#define NS_PER_MS            1000000.0
-#define MS_PER_SEC_INT       1000
-#define NS_PER_MS_LONG       1000000L
-#define NS_PER_SEC_LONG      1000000000L
-#define NS_PER_US_LONG       1000L
-
-#ifndef CLOCK_MONOTONIC
-#define CLOCK_MONOTONIC         1
-#endif
-
-#define PROBE_ENGINE_SUCCESS    0
-#define PROBE_ENGINE_ERROR      (-1)
-#define SELECT_TIMEOUT_ZERO     0
-#define RECVFROM_FLAGS_DEFAULT  0
-
 /* Outcome of waiting for a probe reply */
 typedef enum {
     PROBE_TIMEOUT,      /* no matching reply before the deadline */
@@ -51,7 +35,7 @@ typedef struct {
     struct in_addr dst_ip;
 } probe_engine_t;
 
-/* Initializes probe engine, creates raw sockets, and derives unique source port */
+/* Initializes probe engine, creates raw sockets, and derives unique source port. Returns 0 on success, -1 on error. */
 int probe_engine_init(probe_engine_t *engine, struct in_addr src, struct in_addr dst);
 
 /* Closes open socket descriptors */

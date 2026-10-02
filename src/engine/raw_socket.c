@@ -19,17 +19,17 @@
 
 int raw_socket_create_send(void)
 {
-    int fd, on = SOCK_OPT_ENABLE;
+    int fd, on = 1;
 
     fd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
     if (fd < 0) {
         perror("[raw_socket] Error creating raw send socket (are you running as root?)");
-        return RAW_SOCKET_ERROR;
+        return -1;
     }
     if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on)) < 0) {
         perror("[raw_socket] Error setting setsockopt(IP_HDRINCL)");
         close(fd);
-        return RAW_SOCKET_ERROR;
+        return -1;
     }
     return fd;
 }
@@ -39,7 +39,7 @@ int raw_socket_create_recv(void)
     int fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (fd < 0) {
         perror("[raw_socket] Error creating raw ICMP receive socket (are you running as root?)");
-        return RAW_SOCKET_ERROR;
+        return -1;
     }
     return fd;
 }
@@ -60,18 +60,18 @@ int raw_socket_send(int send_fd, const void *packet, size_t packet_len,
     to.sin_family = AF_INET;
     to.sin_addr   = dst_ip;
 
-    if (sendto(send_fd, packet, packet_len, SENDTO_FLAGS_DEFAULT,
+    if (sendto(send_fd, packet, packet_len, 0,
                (struct sockaddr *)&to, sizeof(to)) != (ssize_t)packet_len) {
-        return RAW_SOCKET_ERROR;
+        return -1;
     }
-    return RAW_SOCKET_SUCCESS;
+    return 0;
 }
 
 void raw_socket_close(int *fd)
 {
     if (fd && *fd >= 0) {
         close(*fd);
-        *fd = INVALID_SOCKET_FD;
+        *fd = -1;
     }
 }
 

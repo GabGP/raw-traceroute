@@ -27,13 +27,13 @@ int network_resolve_target(const char *host, struct in_addr *dst_addr)
     hints.ai_socktype = SOCK_DGRAM;
 
     rc = getaddrinfo(host, NULL, &hints, &res);
-    if (rc != GETADDRINFO_SUCCESS) {
+    if (rc != 0) {
         fprintf(stderr, "traceroute: unknown host %s (%s)\n", host, gai_strerror(rc));
-        return NETWORK_ERROR;
+        return -1;
     }
     *dst_addr = ((struct sockaddr_in *)res->ai_addr)->sin_addr;
     freeaddrinfo(res);
-    return NETWORK_SUCCESS;
+    return 0;
 }
 
 int network_get_source_addr(struct in_addr dst_addr, struct in_addr *src_addr)
@@ -42,23 +42,23 @@ int network_get_source_addr(struct in_addr dst_addr, struct in_addr *src_addr)
     socklen_t len = sizeof(sa);
     int fd;
 
-    fd = socket(AF_INET, SOCK_DGRAM, SOCKET_DEFAULT_PROTOCOL);
+    fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) {
-        return NETWORK_ERROR;
+        return -1;
     }
     memset(&sa, 0, sizeof(sa));
     sa.sin_family = AF_INET;
     sa.sin_addr   = dst_addr;
-    sa.sin_port   = htons(ROUTE_DISCOVERY_PORT);
+    sa.sin_port   = htons(33434);  /* any port works: connect() on UDP sends nothing */
 
     if (connect(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0 ||
         getsockname(fd, (struct sockaddr *)&sa, &len) < 0) {
         close(fd);
-        return NETWORK_ERROR;
+        return -1;
     }
     close(fd);
     *src_addr = sa.sin_addr;
-    return NETWORK_SUCCESS;
+    return 0;
 }
 
 void network_format_addr(struct in_addr addr, int numeric, char *buf, size_t buflen)
@@ -77,7 +77,7 @@ void network_format_addr(struct in_addr addr, int numeric, char *buf, size_t buf
     sa.sin_family = AF_INET;
     sa.sin_addr   = addr;
     const char *name = (getnameinfo((struct sockaddr *)&sa, sizeof(sa), host, sizeof(host),
-                                    NULL, GETNAMEINFO_FLAGS_NONE, NI_NAMEREQD) == GETNAMEINFO_SUCCESS)
+                                    NULL, 0, NI_NAMEREQD) == 0)
                        ? host : ip;
     snprintf(buf, buflen, "%s (%s)", name, ip);
 }

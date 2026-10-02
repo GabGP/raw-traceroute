@@ -30,21 +30,21 @@ static int parse_int_arg(const char *arg, int min, int max, const char *name,
     long value;
 
     errno = 0;
-    value = strtol(arg, &end, CLI_DECIMAL_BASE);
+    value = strtol(arg, &end, 10);
     if (*arg == '\0' || *end != '\0' || errno != 0 || value < min || value > max) {
         fprintf(stderr, "traceroute: invalid value for %s: \"%s\" (expected %d..%d)\n",
                 name, arg, min, max);
-        return CLI_PARSE_ERROR;
+        return -1;
     }
     *out = (int)value;
-    return CLI_PARSE_SUCCESS;
+    return 0;
 }
 
 int cli_parse(int argc, char **argv, traceroute_config_t *cfg)
 {
     int opt;
 
-    optind = CLI_OPTIND_INITIAL;
+    optind = 1;  /* reset getopt state */
     cfg->first_ttl   = DEFAULT_FIRST_TTL;
     cfg->max_ttl     = DEFAULT_MAX_TTL;
     cfg->nqueries    = DEFAULT_NQUERIES;
@@ -56,32 +56,33 @@ int cli_parse(int argc, char **argv, traceroute_config_t *cfg)
     while ((opt = getopt(argc, argv, "nf:m:q:w:z:")) != -1) {
         switch (opt) {
         case 'n':
-            cfg->numeric = CLI_NUMERIC_ON;
+            cfg->numeric = 1;
             break;
         case 'f':
-            if (parse_int_arg(optarg, MIN_TTL, MAX_TTL, "-f", &cfg->first_ttl) < 0) return CLI_PARSE_ERROR;
+            if (parse_int_arg(optarg, MIN_TTL, MAX_TTL, "-f", &cfg->first_ttl) < 0) return -1;
             break;
         case 'm':
-            if (parse_int_arg(optarg, MIN_TTL, MAX_TTL, "-m", &cfg->max_ttl) < 0) return CLI_PARSE_ERROR;
+            if (parse_int_arg(optarg, MIN_TTL, MAX_TTL, "-m", &cfg->max_ttl) < 0) return -1;
             break;
         case 'q':
-            if (parse_int_arg(optarg, MIN_QUERIES, MAX_QUERIES, "-q", &cfg->nqueries) < 0) return CLI_PARSE_ERROR;
+            if (parse_int_arg(optarg, MIN_QUERIES, MAX_QUERIES, "-q", &cfg->nqueries) < 0) return -1;
             break;
         case 'w':
-            if (parse_int_arg(optarg, MIN_WAITTIME_S, MAX_WAITTIME_S, "-w", &cfg->waittime_s) < 0) return CLI_PARSE_ERROR;
+            if (parse_int_arg(optarg, MIN_WAITTIME_S, MAX_WAITTIME_S, "-w", &cfg->waittime_s) < 0) return -1;
             break;
         case 'z':
-            if (parse_int_arg(optarg, MIN_SENDWAIT_MS, MAX_SENDWAIT_MS, "-z", &cfg->sendwait_ms) < 0) return CLI_PARSE_ERROR;
+            if (parse_int_arg(optarg, MIN_SENDWAIT_MS, MAX_SENDWAIT_MS, "-z", &cfg->sendwait_ms) < 0) return -1;
             break;
         default:
             cli_usage();
-            return CLI_PARSE_ERROR;
+            return -1;
         }
     }
 
-    if (optind != argc - REQUIRED_HOST_ARGS) {
+    /* Exactly one positional argument (the host) must remain */
+    if (optind != argc - 1) {
         cli_usage();
-        return CLI_PARSE_ERROR;
+        return -1;
     }
     cfg->host = argv[optind];
 
@@ -90,8 +91,8 @@ int cli_parse(int argc, char **argv, traceroute_config_t *cfg)
                 "traceroute: first ttl (%d) may not be greater than max ttl (%d)\n",
                 cfg->first_ttl, cfg->max_ttl);
         cli_usage();
-        return CLI_PARSE_ERROR;
+        return -1;
     }
 
-    return CLI_PARSE_SUCCESS;
+    return 0;
 }
