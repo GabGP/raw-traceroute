@@ -87,8 +87,7 @@ int main(int argc, char **argv)
         /* Send nqueries probes for the current hop */
         for (q = 0; q < cfg.nqueries; q++) {
             if (g_interrupted) break;
-            clock_gettime(CLOCK_MONOTONIC, &sent);
-            if (probe_send(&engine, ttl, dst_port, ip_id++) < 0) {
+            if (probe_send(&engine, ttl, dst_port, ip_id++, &sent) < 0) {
                 printf("\n");
                 perror("traceroute: sendto");
                 probe_engine_close(&engine);

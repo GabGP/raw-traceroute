@@ -54,8 +54,12 @@ int probe_engine_init(probe_engine_t *engine, struct in_addr src, struct in_addr
 /* Closes open socket descriptors */
 void probe_engine_close(probe_engine_t *engine);
 
-/* Crafts and sends a single 60-byte UDP probe with specific TTL and destination port */
-int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_id);
+/*
+ * Crafts and sends a single 60-byte UDP probe with specific TTL and destination port.
+ * Writes the CLOCK_MONOTONIC send time to *sent, taken immediately before sendto().
+ */
+int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_id,
+               struct timespec *sent);
 
 /* Waits up to timeout_s for an ICMP reply matching dst_port and engine->src_port */
 int probe_wait_reply(probe_engine_t *engine, const struct timespec *sent, int timeout_s,

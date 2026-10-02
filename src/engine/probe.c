@@ -60,7 +60,8 @@ int probe_engine_init(probe_engine_t *engine, struct in_addr src, struct in_addr
     return PROBE_ENGINE_SUCCESS;
 }
 
-int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_id)
+int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_id,
+               struct timespec *sent)
 {
     uint8_t buf[PROBE_LEN] __attribute__((aligned(4)));
 
@@ -68,6 +69,8 @@ int probe_send(probe_engine_t *engine, int ttl, uint16_t dst_port, uint16_t ip_i
     build_probe_packet(buf, engine->src_ip.s_addr, engine->dst_ip.s_addr,
                        (uint8_t)ttl, engine->src_port, dst_port, ip_id);
 
+    /* Timestamp right before transmission so RTT excludes drain/build time */
+    clock_gettime(CLOCK_MONOTONIC, sent);
     return raw_socket_send(engine->send_fd, buf, PROBE_LEN, engine->dst_ip);
 }
 
