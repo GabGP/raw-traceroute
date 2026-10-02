@@ -37,7 +37,7 @@ static void test_rfc1071_checksum(void)
 {
     /* 1. All zeros yields 0xFFFF */
     uint16_t zeroes[4] = {0, 0, 0, 0};
-    assert(calculate_checksum(zeroes, sizeof(zeroes)) == CKSUM_MASK);
+    assert(calculate_checksum(zeroes, sizeof(zeroes)) == 0xFFFF);
 
     /* 2. Known carry fold: 0xFFFF + 0x0001 -> 0x10000 -> 0x0001 -> ~0x0001 = 0xFFFE */
     uint16_t carry_buf[2] = {0xFFFF, 0x0001};
@@ -52,6 +52,13 @@ static void test_rfc1071_checksum(void)
     uint8_t odd_data[]  = {0x12, 0x34, 0x56};
     assert(calculate_checksum(even_data, sizeof(even_data)) ==
            calculate_checksum(odd_data, sizeof(odd_data)));
+
+    /* 5. Chaining: two even chunks sum like the whole buffer; unaligned reads are safe */
+    uint8_t chain[] = {0x00, 0x01, 0xf2, 0x03, 0xf4, 0xf5, 0xf6, 0xf7, 0x99};
+    uint32_t part = checksum_add(checksum_add(0, chain, 4), chain + 4, 5);
+    assert(checksum_finish(part) == calculate_checksum(chain, sizeof(chain)));
+    assert(checksum_finish(checksum_add(0, chain + 1, 4)) ==
+           checksum_finish(checksum_add(checksum_add(0, chain + 1, 2), chain + 3, 2)));
 }
 
 static void test_ip_header_builder(void)
@@ -114,13 +121,13 @@ static void test_udp_pseudo_header_checksum(void)
     assert(udph.checksum != 0);
 
     /* Recalculating directly with calculate_udp_checksum should match */
-    computed_cksum = calculate_udp_checksum(src, dst, buf + IP_HEADER_LEN,
-                                            UDP_SEGMENT_LEN);
+    computed_cksum = calculate_udp_checksum(src, dst, &udph,
+                                            buf + IP_HEADER_LEN + UDP_HEADER_LEN,
+                                            UDP_PAYLOAD_LEN);
     assert(computed_cksum == 0);
 
-    /* Negative or oversized length guards */
-    assert(calculate_udp_checksum(src, dst, buf, -1) == 0);
-    assert(calculate_udp_checksum(src, dst, buf, 2000) == 0);
+    /* Payload that cannot fit the 16-bit UDP length field is rejected */
+    assert(calculate_udp_checksum(src, dst, &udph, buf, UINT16_MAX) == 0);
 }
 
 static void test_probe_packet_crafting(void)

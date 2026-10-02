@@ -10,51 +10,60 @@
 
 #include "checksum.h"
 
-#include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+uint32_t checksum_add(uint32_t sum, const void *data, size_t len)
+{
+    const uint8_t *bytes = (const uint8_t *)data;
+    uint16_t word;
+
+    while (len > 1) {
+        memcpy(&word, bytes, sizeof(word)); /* alignment-safe 16-bit read */
+        sum += word;
+        bytes += 2;
+        len -= 2;
+    }
+    if (len == 1) {
+        sum += *bytes; /* odd trailing byte: zero-padded word */
+    }
+    return sum;
+}
+
+uint16_t checksum_finish(uint32_t sum)
+{
+    while (sum >> 16) {
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+    return (uint16_t)~sum;
+}
+
 uint16_t calculate_checksum(const void *buffer, int size)
 {
-    const uint16_t *buf = (const uint16_t *)buffer;
-    unsigned long sum = 0;
-
-    while (size > CKSUM_ODD_BYTE_LEN) {
-        sum += *buf++;
-        size -= CKSUM_WORD_BYTES;
-    }
-    if (size == CKSUM_ODD_BYTE_LEN) {
-        sum += *(const uint8_t *)buf;
-    }
-
-    while (sum >> CKSUM_SHIFT) {
-        sum = (sum & CKSUM_MASK) + (sum >> CKSUM_SHIFT);
-    }
-
-    return (uint16_t)(~sum);
+    return checksum_finish(checksum_add(0, buffer, (size_t)size));
 }
 
 uint16_t calculate_udp_checksum(uint32_t src_addr, uint32_t dst_addr,
-                                const void *udp_segment, int udp_segment_len)
+                                const udp_header_t *udph,
+                                const void *payload, uint16_t payload_len)
 {
-    if (udp_segment_len < 0 || udp_segment_len > MAX_UDP_SEGMENT_LEN) {
+    pseudo_header_t psh;
+    uint32_t udp_len = (uint32_t)UDP_HEADER_LEN + payload_len;
+    uint32_t sum;
+
+    if (udp_len > UINT16_MAX) {
         return 0;
     }
 
-    int total_len = (int)sizeof(pseudo_header_t) + udp_segment_len;
-    uint8_t pseudo_packet[sizeof(pseudo_header_t) + MAX_UDP_SEGMENT_LEN] __attribute__((aligned(4)));
+    psh.src_addr   = src_addr;
+    psh.dst_addr   = dst_addr;
+    psh.zero       = 0;
+    psh.protocol   = IPPROTO_UDP;
+    psh.udp_length = htons((uint16_t)udp_len);
 
-    pseudo_header_t *psh = (pseudo_header_t *)pseudo_packet;
-    psh->src_addr   = src_addr;
-    psh->dst_addr   = dst_addr;
-    psh->zero       = PSEUDO_ZERO_BYTE;
-    psh->protocol   = IPPROTO_UDP;
-    psh->udp_length = htons((uint16_t)udp_segment_len);
-
-    memcpy(pseudo_packet + sizeof(pseudo_header_t), udp_segment, (size_t)udp_segment_len);
-
-    return calculate_checksum(pseudo_packet, total_len);
+    sum = checksum_add(0, &psh, sizeof(psh));
+    sum = checksum_add(sum, udph, sizeof(*udph));
+    sum = checksum_add(sum, payload, payload_len); /* only chunk that may be odd */
+    return checksum_finish(sum);
 }
-
-
