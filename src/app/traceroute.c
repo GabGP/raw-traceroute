@@ -56,11 +56,12 @@ static hop_status_t trace_hop(probe_engine_t *engine, const traceroute_config_t 
     struct in_addr from;
     struct timespec sent;
     icmp_reply_t reply;
+    hop_display_t hop;
     probe_result_t wait = PROBE_TIMEOUT;
     double rtt = 0.0;
     int reached = 0, q;
 
-    display_hop_start(ttl);
+    display_hop_start(&hop, ttl);
     for (q = 0; q < cfg->nqueries && !g_interrupted; q++) {
         if (probe_send(engine, ttl, *dst_port, (*ip_id)++, &sent) < 0) {
             printf("\n");
@@ -74,7 +75,7 @@ static hop_status_t trace_hop(probe_engine_t *engine, const traceroute_config_t 
         } else if (wait == PROBE_TIMEOUT) {
             display_probe_timeout();
         } else {
-            display_probe_reply(from, rtt, &reply, cfg->numeric);
+            display_probe_reply(&hop, from, rtt, &reply, cfg->numeric);
             if (reply.type == ICMP_DEST_UNREACH) {
                 reached = 1;
             }
