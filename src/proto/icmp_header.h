@@ -29,11 +29,6 @@
 #define ICMP_ADMIN_PROHIBITED_CODE  13
 #define ICMP_PREC_VIOLATION_CODE    14
 #define ICMP_PREC_CUTOFF_CODE       15
-#define ICMP_TYPE_OFFSET         0
-#define ICMP_CODE_OFFSET         1
-#define IPV4_FIRST_BYTE_OFFSET   0
-#define ICMP_PARSE_VALID         1
-#define ICMP_PARSE_INVALID       0
 
 /*
  * ICMP header structure (RFC 792), 8 bytes.

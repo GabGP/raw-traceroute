@@ -24,42 +24,42 @@ int parse_icmp_reply(const uint8_t *packet, int len, uint16_t src_port,
     int outer_ihl, icmp_off, inner_off, inner_ihl, udp_off;
 
     /* 1. Outer IP header: from the responding router */
-    if (len < IP_HEADER_LEN) return ICMP_PARSE_INVALID;
-    outer_ihl = (packet[IPV4_FIRST_BYTE_OFFSET] & IPV4_IHL_MASK) * IPV4_WORD_BYTES;
+    if (len < IP_HEADER_LEN) return 0;
+    outer_ihl = (packet[0] & IPV4_IHL_MASK) * IPV4_WORD_BYTES;
     if (outer_ihl < IP_HEADER_LEN || len < outer_ihl + ICMP_HEADER_LEN) {
-        return ICMP_PARSE_INVALID;
+        return 0;
     }
 
     /* 2. ICMP header: only Time Exceeded and Dest Unreachable quote original datagram */
     icmp_off = outer_ihl;
-    reply->type = packet[icmp_off + ICMP_TYPE_OFFSET];
-    reply->code = packet[icmp_off + ICMP_CODE_OFFSET];
+    reply->type = packet[icmp_off];
+    reply->code = packet[icmp_off + 1]; /* type, code: first two ICMP bytes */
     if (reply->type != ICMP_TIME_EXCEEDED && reply->type != ICMP_DEST_UNREACH) {
-        return ICMP_PARSE_INVALID;
+        return 0;
     }
 
     /* 3. Inner quoted IP header: must be UDP to belong to our probe */
     inner_off = icmp_off + ICMP_HEADER_LEN;
     if (len < inner_off + IP_HEADER_LEN) {
-        return ICMP_PARSE_INVALID;
+        return 0;
     }
     memcpy(&inner_iph, packet + inner_off, sizeof(inner_iph));
     inner_ihl = (inner_iph.ihl_version & IPV4_IHL_MASK) * IPV4_WORD_BYTES;
     if (inner_ihl < IP_HEADER_LEN || inner_iph.protocol != IPPROTO_UDP) {
-        return ICMP_PARSE_INVALID;
+        return 0;
     }
 
     /* 4. First 8 bytes of quoted UDP header: ports identifying our probe */
     udp_off = inner_off + inner_ihl;
     if (len < udp_off + UDP_HEADER_LEN) {
-        return ICMP_PARSE_INVALID;
+        return 0;
     }
     memcpy(&inner_udph, packet + udp_off, sizeof(inner_udph));
     if (ntohs(inner_udph.src_port) != src_port) {
-        return ICMP_PARSE_INVALID; /* Unrelated traffic (parallel ping, other process) */
+        return 0; /* Unrelated traffic (parallel ping, other process) */
     }
 
     reply->probe_port = ntohs(inner_udph.dst_port);
-    return ICMP_PARSE_VALID;
+    return 1;
 }
 

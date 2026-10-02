@@ -15,7 +15,6 @@
 #define PROBE_LEN        60
 #define UDP_SEGMENT_LEN  (PROBE_LEN - IP_HEADER_LEN)        /* 40 */
 #define UDP_PAYLOAD_LEN  (UDP_SEGMENT_LEN - UDP_HEADER_LEN) /* 32 */
-#define PROBE_FILL_BYTE  0
 
 /*
  * Assembles the complete 60-byte UDP probe datagram:

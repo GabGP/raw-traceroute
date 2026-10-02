@@ -24,8 +24,6 @@ typedef struct {
 
 #define UDP_HEADER_LEN            ((int)sizeof(udp_header_t))
 #define UDP_CKSUM_ZERO_SUBSTITUTE 0xFFFF
-#define UDP_INITIAL_CHECKSUM      0
-#define UDP_CKSUM_COMPUTED_ZERO   0
 
 /*
  * Populates udph with standard UDP header values.

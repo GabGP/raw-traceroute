@@ -20,8 +20,8 @@ void build_probe_packet(uint8_t *buf, uint32_t src_addr, uint32_t dst_addr,
     udp_header_t udph;
     uint8_t payload[UDP_PAYLOAD_LEN];
 
-    memset(buf, PROBE_FILL_BYTE, PROBE_LEN);
-    memset(payload, PROBE_FILL_BYTE, sizeof(payload));
+    memset(buf, 0, PROBE_LEN);
+    memset(payload, 0, sizeof(payload));
 
     build_udp_header(&udph, src_addr, dst_addr, src_port, dst_port,
                      payload, sizeof(payload));

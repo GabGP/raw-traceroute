@@ -17,18 +17,16 @@
 
 void build_ip_header(ip_header_t *iph, uint32_t src_addr, uint32_t dst_addr,
                      uint8_t ttl, uint16_t ip_id, uint16_t payload_len) {
+    /* Zeroing also sets TOS, flags/fragment offset and the checksum field to 0 */
     memset(iph, 0, sizeof(ip_header_t));
 
     iph->ihl_version   = IPV4_IHL_VERSION_DEFAULT;
-    iph->tos           = IPV4_DEFAULT_TOS;
 
     iph->total_length  = htons((uint16_t)(sizeof(ip_header_t) + payload_len));
-    iph->flags_fo      = IPV4_DEFAULT_FLAGS_FO;
 
     iph->id            = htons(ip_id);
     iph->ttl           = ttl;
     iph->protocol      = IPPROTO_UDP;
-    iph->checksum      = IPV4_INITIAL_CHECKSUM;
     iph->src_addr      = src_addr;
     iph->dst_addr      = dst_addr;
 
