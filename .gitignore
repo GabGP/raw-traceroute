@@ -66,3 +66,7 @@ dkms.conf
 
 # Test logs
 tests/logs/
+
+# Agent instructions and skills
+AGENTS.md
+.agents/
