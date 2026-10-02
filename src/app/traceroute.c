@@ -106,8 +106,8 @@ int main(int argc, char **argv)
 
             dst_port++;
             /* Pause between consecutive probes if configured and more probes follow */
-            if (cfg.sendwait_ms > 0 && !done && !g_interrupted &&
-                (q < cfg.nqueries - PROBE_LAST_INDEX_OFFSET || ttl < cfg.max_ttl)) {
+            if (!g_interrupted && cfg.sendwait_ms > 0 &&
+                (q < cfg.nqueries - PROBE_LAST_INDEX_OFFSET || (!done && ttl < cfg.max_ttl))) {
                 probe_sleep_ms(cfg.sendwait_ms);
             }
         }
