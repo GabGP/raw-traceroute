@@ -60,9 +60,3 @@ tests/compare.sh                       # default: 8.8.8.8 with -n -m 20 -q 3 -w 
 tests/compare.sh galileo.edu           # another host, same default arguments
 tests/compare.sh 8.8.8.8 -n -q 2 -m 12 # host first, then the shared arguments
 ```
-
-To watch the probes and the ICMP replies on the wire while a trace runs:
-
-```sh
-sudo tcpdump -ni any 'icmp or udp portrange 33434-33534'
-```
